@@ -232,16 +232,21 @@ def load_users_from_sheets():
             worksheet.append_row(["Tài khoản", "Mật khẩu", "Công ty", "Quyền hạn"])
             
         all_values = worksheet.get_all_values()
-        if len(all_values) > 1:
+        
+        # CHỐNG LỖI MẢNG RỖNG: Kiểm tra nếu có dữ liệu hàng mới tiến hành lặp đọc cột
+        if all_values and len(all_values) > 1:
             for row in all_values[1:]:
-                # CHỈNH SỬA CHUẨN XÁC: Gọi đúng vị trí các cột dữ liệu trong Google Sheet
-                if len(row) >= 4:
-                    u = str(row[0]).strip() # Cột A: Tài khoản
-                    p = str(row[1]).strip() # Cột B: Mật khẩu
-                    c = str(row[2]).strip() # Cột C: Công ty
-                    r = str(row[3]).strip() # Cột D: Quyền hạn
+                if row and len(row) >= 4:
+                    u = str(row[0]).strip()
+                    p = str(row[1]).strip()
+                    c = str(row[2]).strip()
+                    r = str(row[3]).strip()
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
+        else:
+            # Nếu sheet trống, tự nạp tài khoản admin dự phòng để hệ thống không bị lỗi sập màn hình
+            DATA_USERS["admin"] = {"password": "admin", "company": "ALL_COMPANIES", "role": "admin"}
+            
     except Exception as e:
         st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {e}")
 
