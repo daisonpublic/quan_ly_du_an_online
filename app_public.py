@@ -201,9 +201,26 @@ def load_users_from_sheets():
     global DATA_USERS
     try:
         import gspread
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        credentials_path = os.path.join(current_dir, 'credentials.json')
-        gc = gspread.service_account(filename=credentials_path)
+        import os
+        import streamlit as st
+        import json
+        
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC THEO CHUỖI JSON MỚI TRỰC TUYẾN) ---
+        try:
+            if "gspread_json" in st.secrets:
+                # Giải mã chuỗi text JSON từ Secrets thành dữ liệu Dict chuẩn cho Google API
+                creds_dict = json.loads(st.secrets["gspread_json"])
+                gc = gspread.service_account_from_dict(creds_dict)
+            else:
+                # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                credentials_path = os.path.join(current_dir, 'credentials.json')
+                gc = gspread.service_account(filename=credentials_path)
+        except Exception as auth_err:
+            st.error(f"❌ Lỗi xác thực tài khoản kết nối Google Sheet: {auth_err}")
+            return
+        # -----------------------------------------------------------------
+
         sh = gc.open_by_key(SPREADSHEET_ID)
         
         try:
