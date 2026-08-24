@@ -227,14 +227,13 @@ def load_users_from_sheets():
             st.error(f"❌ Lỗi xác thực tài khoản kết nối Google Sheet: {auth_err}")
             return
 
-        # BẪY LỖI QUYỀN TRUY CẬP FILE SHEET
         try:
             sh = gc.open_by_key(SPREADSHEET_ID)
         except gspread.exceptions.APIError as api_err:
-            st.error(f"❌ Lỗi API Google Sheets: Thử kiểm tra xem đã Share quyền Editor cho email daison-api@://gserviceaccount.com chưa. Chi tiết: {api_err}")
+            st.error(f"❌ Lỗi API Google Sheets (Chưa Share quyền Editor cho email dịch vụ): {api_err}")
             return
         except Exception as sheet_err:
-            st.error(f"❌ Không thể mở file Sheet bằng ID hiện tại: {sheet_err}")
+            st.error(f"❌ Không thể tìm thấy file Sheet hoặc ID cấu hình sai: {sheet_err}")
             return
         
         try:
@@ -245,21 +244,21 @@ def load_users_from_sheets():
             
         all_values = worksheet.get_all_values()
         
+        # CHỈNH SỬA QUYẾT ĐỊNH: Bóc tách chính xác từng cột 0, 1, 2, 3 của mảng Google Sheet
         if all_values and len(all_values) > 1:
             for row in all_values[1:]:
                 if row and len(row) >= 4:
-                    u = str(row[0]).strip()
-                    p = str(row[1]).strip()
-                    c = str(row[2]).strip()
-                    r = str(row[3]).strip()
+                    u = str(row[0]).strip()  # Cột A: Tài khoản (Vị trí 0)
+                    p = str(row[1]).strip()  # Cột B: Mật khẩu (Vị trí 1)
+                    c = str(row[2]).strip()  # Cột C: Công ty (Vị trí 2)
+                    r = str(row[3]).strip()  # Cột D: Quyền hạn (Vị trí 3)
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
         else:
             DATA_USERS["admin"] = {"password": "123456", "company": "ALL_COMPANIES", "role": "Tổng Quản Trị"}
             
     except Exception as e:
-        # Ép buộc hiển thị thông báo lỗi chi tiết ra màn hình thay vì để trống chữ
-        st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {str(e) if str(e) else type(e).__name__}")
+        st.error(f"⚠️ Hệ thống gặp lỗi xử lý dữ liệu bảng tính: {str(e)}")
 
 def save_user_to_sheets(username, password, company, role, phone):
     """Ghi trực tiếp tài khoản mới được kích hoạt OTP thành công xuống Google Sheet vĩnh viễn"""
