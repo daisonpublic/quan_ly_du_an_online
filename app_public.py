@@ -220,9 +220,18 @@ def save_user_to_sheets(username, password, company, role, phone):
     """Ghi trực tiếp tài khoản mới được kích hoạt OTP thành công xuống Google Sheet vĩnh viễn"""
     try:
         import gspread
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        credentials_path = os.path.join(current_dir, 'credentials.json')
-        gc = gspread.service_account(filename=credentials_path)
+        import os
+        import streamlit as st
+        
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
+        if "gspread_credentials" in st.secrets:
+            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+        else:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            credentials_path = os.path.join(current_dir, 'credentials.json')
+            gc = gspread.service_account(filename=credentials_path)
+        # --------------------------------------------------------
+
         sh = gc.open_by_key(SPREADSHEET_ID)
         worksheet = sh.worksheet("datauser")
         
