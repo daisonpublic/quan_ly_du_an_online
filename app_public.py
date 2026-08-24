@@ -156,7 +156,9 @@ def append_to_sheet(row_data):
         
         # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
         if "gspread_credentials" in st.secrets:
-            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+            import json
+            creds_dict = json.loads(st.secrets["gspread_json"])
+            gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             credentials_path = os.path.join(current_dir, 'credentials.json')
@@ -229,7 +231,9 @@ def save_user_to_sheets(username, password, company, role, phone):
         
         # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
         if "gspread_credentials" in st.secrets:
-            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+            import json
+            creds_dict = json.loads(st.secrets["gspread_json"])
+            gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             credentials_path = os.path.join(current_dir, 'credentials.json')
