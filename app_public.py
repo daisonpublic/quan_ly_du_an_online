@@ -661,7 +661,7 @@ else:
     # CHỨC NĂNG 2: BÁO CÁO & CẬP NHẬT (LƯU ẢNH & ĐỒNG BỘ SHEET TỔNG)
     # ===================================================================================================================
     elif menu == "📝 Báo Cáo & Cập Nhật":
-        st.subheader("Cập nhật tình trạng & Tải ảnh về thư mục Local máy tính")
+        st.subheader("Cập nhật tình trạng & Tải ảnh công trình")
         
         project_list = st.session_state["projects"]["Công trình"].tolist()
         if not project_list:
@@ -689,16 +689,20 @@ else:
                     uploaded_files = st.file_uploader("Tải lên ảnh thực tế từ công trường:", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
                     if not pd.isna(current_row["Ảnh"]) and str(current_row["Ảnh"]).strip():
-                        st.write("📸 **Ảnh hiện tại đang lưu ở Local:**")
+                        st.write("📸 **Hình ảnh công trường hiện tại:**")
                         img_list = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
                         cols = st.columns(min(len(img_list), 3))
                         for i, img_item in enumerate(img_list):
                             with cols[i % 3]:
-                                full_path_test = os.path.join(MAIN_DIR, img_item)
-                                if os.path.exists(full_path_test):
-                                    st.image(full_path_test, width=120)
+                                # CHỈNH SỬA TỐI ƯU HIỂN THỊ: Tự động phân tách hiển thị cả ảnh mã hóa Base64 online lẫn ảnh folder Local
+                                if img_item.startswith("data:image"):
+                                    st.image(img_item, width=120)
                                 else:
-                                    st.caption(f"File cũ lỗi")
+                                    full_path_test = os.path.join(MAIN_DIR, img_item)
+                                    if os.path.exists(full_path_test):
+                                        st.image(full_path_test, width=120)
+                                    else:
+                                        st.caption(f"Ảnh Local cũ")
                                 
                 description = st.text_area("Miêu tả chi tiết tình hình công trường / Ghi chú:", value=current_desc)
                 submitted = st.form_submit_button("Cập nhật báo cáo")
@@ -744,17 +748,28 @@ else:
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
                     today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
+                    
                     # ============================================================================
-                    # ĐỒNG BỘ DỮ LIỆU LÊN GOOGLE SHEET (SỬ DỤNG STREAMLIT SECRETS)
+                    # ĐỒNG BỘ DỮ LIỆU LÊN GOOGLE SHEET (ĐÃ SỬA ĐỒNG BỘ GSPREAD_JSON)
                     # ============================================================================
                     try:
                         import gspread
+                        import json
                         
                         # Đọc cấu hình bảo mật trực tiếp từ hệ thống Streamlit Secrets an toàn
                         try:
-                            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+                            if "gspread_json" in st.secrets:
+                                raw_json_str = st.secrets["gspread_json"]
+                                creds_dict = json.loads(raw_json_str, strict=False)
+                                if "private_key" in creds_dict:
+                                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                                gc = gspread.service_account_from_dict(creds_dict)
+                            else:
+                                current_dir = os.path.dirname(os.path.abspath(__file__))
+                                credentials_path = os.path.join(current_dir, 'credentials.json')
+                                gc = gspread.service_account(filename=credentials_path)
                         except Exception as secret_err:
-                            # Phương án dự phòng nếu chạy ở máy cá nhân (Local) chưa cài Secrets thì tìm file json cứng
+                            # Phương án dự phòng cũ nếu không quét được môi trường mạng
                             gc = gspread.service_account(filename=os.path.join(MAIN_DIR, 'credentials.json'))
                             
                         sh = gc.open_by_key(SPREADSHEET_ID)
@@ -780,16 +795,11 @@ else:
                         
                         # Cập nhật vùng dữ liệu từ cột A đến cột I tương ứng 9 trường thông tin
                         worksheet.update(f"A{sheet_row_idx}:I{sheet_row_idx}", [updated_row_values])
-                        
-                        if os.environ.get("STREAMLIT_SERVER_PORT") is not None:
-                            st.success("🎉 Cập nhật thành công! Dữ liệu và hình ảnh đã được mã hóa lưu trữ an toàn trực tuyến.")
-                        else:
-                            st.success("🎉 Cập nhật thành công! Ảnh đã được cất vào folder 'image' local của máy tính.")
-                            
+                        st.success("🎉 Cập nhật báo cáo tiến độ và hình ảnh lên Google Sheets thành công!")
                         load_data_from_sheets()
                         st.rerun()
                     except Exception as sheet_err:
-                        st.error(f"❌ Lỗi đồng bộ Google Sheet: {sheet_err}")
+                        st.error(f"❌ Lỗi đồng bộ dữ liệu báo cáo lên Google Sheet: {sheet_err}")
     
     # ================================================================================================================
     # CHỨC NĂNG 3: THÊM HẠNG MỤC MỚI (HOÀN THIỆN ĐA CÔNG TY)
@@ -838,11 +848,25 @@ else:
                         ""                          # Cột I: Miêu tả ghi chú
                     ]
 
-                    # 3. Tiến hành kết nối trực tiếp và ghi đè an toàn lên Cloud Google Sheets
+                    # 3. Tiến hành kết nối trực tiếp và ghi đè an toàn lên Cloud Google Sheets thông qua Secrets
                     try:
                         import gspread
+                        import json
+                        
                         with st.spinner("Đang đồng bộ dữ liệu công trình lên Cloud..."):
-                            gc = gspread.service_account(filename=os.path.join(MAIN_DIR, 'credentials.json'))
+                            # --- ĐỒNG BỘ CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
+                            if "gspread_json" in st.secrets:
+                                raw_json_str = st.secrets["gspread_json"]
+                                creds_dict = json.loads(raw_json_str, strict=False)
+                                if "private_key" in creds_dict:
+                                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                                gc = gspread.service_account_from_dict(creds_dict)
+                            else:
+                                current_dir = os.path.dirname(os.path.abspath(__file__))
+                                credentials_path = os.path.join(current_dir, 'credentials.json')
+                                gc = gspread.service_account(filename=credentials_path)
+                            # -----------------------------------------------------------------
+                            
                             sh = gc.open_by_key(SPREADSHEET_ID)
                             worksheet = sh.worksheet("datacongtrinh")
                             
