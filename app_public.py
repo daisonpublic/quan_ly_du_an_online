@@ -201,7 +201,6 @@ def load_users_from_sheets():
     """Tải dữ liệu tài khoản từ Tab datauser trên Google Sheet nạp vào ứng dụng"""
     global DATA_USERS
     
-    # Đảm bảo biến luôn đúng định dạng từ điển toàn cục
     if 'DATA_USERS' not in globals() or not isinstance(DATA_USERS, dict):
         DATA_USERS = {
             "admin": {"password": "123456", "company": "ALL_COMPANIES", "role": "Tổng Quản Trị"}
@@ -213,7 +212,6 @@ def load_users_from_sheets():
         import streamlit as st
         import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
         try:
             if "gspread_json" in st.secrets:
                 raw_json_str = st.secrets["gspread_json"]
@@ -228,9 +226,16 @@ def load_users_from_sheets():
         except Exception as auth_err:
             st.error(f"❌ Lỗi xác thực tài khoản kết nối Google Sheet: {auth_err}")
             return
-        # -----------------------------------------------------------------
 
-        sh = gc.open_by_key(SPREADSHEET_ID)
+        # BẪY LỖI QUYỀN TRUY CẬP FILE SHEET
+        try:
+            sh = gc.open_by_key(SPREADSHEET_ID)
+        except gspread.exceptions.APIError as api_err:
+            st.error(f"❌ Lỗi API Google Sheets: Thử kiểm tra xem đã Share quyền Editor cho email daison-api@://gserviceaccount.com chưa. Chi tiết: {api_err}")
+            return
+        except Exception as sheet_err:
+            st.error(f"❌ Không thể mở file Sheet bằng ID hiện tại: {sheet_err}")
+            return
         
         try:
             worksheet = sh.worksheet("datauser")
@@ -240,24 +245,21 @@ def load_users_from_sheets():
             
         all_values = worksheet.get_all_values()
         
-        # Kiểm tra nếu bảng tính có dữ liệu hàng (vượt qua hàng tiêu đề số 1)
         if all_values and len(all_values) > 1:
             for row in all_values[1:]:
                 if row and len(row) >= 4:
-                    # SỬA LỖI QUYẾT ĐỊNH: Phân tách chuẩn xác từng cột A, B, C, D của Google Sheet
-                    u = str(row[0]).strip()  # Cột A: Tài khoản
-                    p = str(row[1]).strip()  # Cột B: Mật khẩu
-                    c = str(row[2]).strip()  # Cột C: Công ty
-                    r = str(row[3]).strip()  # Cột D: Quyền hạn
+                    u = str(row[0]).strip()
+                    p = str(row[1]).strip()
+                    c = str(row[2]).strip()
+                    r = str(row[3]).strip()
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
         else:
-            # Nếu tab trên web trống, nạp tài khoản admin gốc của bạn làm dự phòng an toàn
             DATA_USERS["admin"] = {"password": "123456", "company": "ALL_COMPANIES", "role": "Tổng Quản Trị"}
             
     except Exception as e:
-        st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {e}")
-
+        # Ép buộc hiển thị thông báo lỗi chi tiết ra màn hình thay vì để trống chữ
+        st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {str(e) if str(e) else type(e).__name__}")
 
 def save_user_to_sheets(username, password, company, role, phone):
     """Ghi trực tiếp tài khoản mới được kích hoạt OTP thành công xuống Google Sheet vĩnh viễn"""
