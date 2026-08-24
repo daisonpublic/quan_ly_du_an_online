@@ -200,6 +200,13 @@ DATA_USERS = {
 def load_users_from_sheets():
     """Tải dữ liệu tài khoản từ Tab datauser trên Google Sheet nạp vào ứng dụng"""
     global DATA_USERS
+    
+    # Đảm bảo biến luôn đúng định dạng từ điển toàn cục
+    if 'DATA_USERS' not in globals() or not isinstance(DATA_USERS, dict):
+        DATA_USERS = {
+            "admin": {"password": "123456", "company": "ALL_COMPANIES", "role": "Tổng Quản Trị"}
+        }
+        
     try:
         import gspread
         import os
@@ -233,20 +240,20 @@ def load_users_from_sheets():
             
         all_values = worksheet.get_all_values()
         
-        # CHỐNG LỖI MẢNG: Kiểm tra nếu có dữ liệu hàng mới tiến hành lọc chính xác vị trí cột
+        # Kiểm tra nếu bảng tính có dữ liệu hàng (vượt qua hàng tiêu đề số 1)
         if all_values and len(all_values) > 1:
             for row in all_values[1:]:
                 if row and len(row) >= 4:
-                    # SỬA LỖI ĐỘC QUYỀN: Bổ sung chỉ số mảng cột, [1], [2], [3] chính xác tuyệt đối
-                    u = str(row[0]).strip() # Cột A
-                    p = str(row[1]).strip() # Cột B
-                    c = str(row[2]).strip() # Cột C
-                    r = str(row[3]).strip() # Cột D
+                    # SỬA LỖI QUYẾT ĐỊNH: Phân tách chuẩn xác từng cột A, B, C, D của Google Sheet
+                    u = str(row[0]).strip()  # Cột A: Tài khoản
+                    p = str(row[1]).strip()  # Cột B: Mật khẩu
+                    c = str(row[2]).strip()  # Cột C: Công ty
+                    r = str(row[3]).strip()  # Cột D: Quyền hạn
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
         else:
-            # Nếu sheet trống hoàn toàn, tự tạo tài khoản admin mặc định để vào màn hình chính
-            DATA_USERS["admin"] = {"password": "admin", "company": "ALL_COMPANIES", "role": "admin"}
+            # Nếu tab trên web trống, nạp tài khoản admin gốc của bạn làm dự phòng an toàn
+            DATA_USERS["admin"] = {"password": "123456", "company": "ALL_COMPANIES", "role": "Tổng Quản Trị"}
             
     except Exception as e:
         st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {e}")
