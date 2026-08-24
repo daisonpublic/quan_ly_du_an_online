@@ -233,18 +233,19 @@ def load_users_from_sheets():
             
         all_values = worksheet.get_all_values()
         
-        # CHỐNG LỖI MẢNG RỖNG: Kiểm tra nếu có dữ liệu hàng mới tiến hành lặp đọc cột
+        # CHỐNG LỖI MẢNG: Kiểm tra nếu có dữ liệu hàng mới tiến hành lọc chính xác vị trí cột
         if all_values and len(all_values) > 1:
             for row in all_values[1:]:
                 if row and len(row) >= 4:
-                    u = str(row[0]).strip()
-                    p = str(row[1]).strip()
-                    c = str(row[2]).strip()
-                    r = str(row[3]).strip()
+                    # SỬA LỖI ĐỘC QUYỀN: Bổ sung chỉ số mảng cột, [1], [2], [3] chính xác tuyệt đối
+                    u = str(row[0]).strip() # Cột A
+                    p = str(row[1]).strip() # Cột B
+                    c = str(row[2]).strip() # Cột C
+                    r = str(row[3]).strip() # Cột D
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
         else:
-            # Nếu sheet trống, tự nạp tài khoản admin dự phòng để hệ thống không bị lỗi sập màn hình
+            # Nếu sheet trống hoàn toàn, tự tạo tài khoản admin mặc định để vào màn hình chính
             DATA_USERS["admin"] = {"password": "admin", "company": "ALL_COMPANIES", "role": "admin"}
             
     except Exception as e:
