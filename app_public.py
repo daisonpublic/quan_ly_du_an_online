@@ -74,11 +74,21 @@ def load_data_from_sheets():
         import gspread
         import pandas as pd
         import os
+        import streamlit as st
         
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        credentials_path = os.path.join(current_dir, 'credentials.json')
-        
-        gc = gspread.service_account(filename=credentials_path)
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
+        try:
+            if "gspread_credentials" in st.secrets:
+                gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+            else:
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                credentials_path = os.path.join(current_dir, 'credentials.json')
+                gc = gspread.service_account(filename=credentials_path)
+        except Exception as auth_err:
+            st.error(f"❌ Lỗi xác thực tài khoản kết nối Google Sheet: {auth_err}")
+            return False
+        # --------------------------------------------------------
+
         sh = gc.open_by_key(SPREADSHEET_ID)
         
         # Luôn đọc từ 1 tab duy nhất cố định tên là datacongtrinh
@@ -137,10 +147,18 @@ def load_data_from_sheets():
 def append_to_sheet(row_data):
     try:
         import gspread
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        credentials_path = os.path.join(current_dir, 'credentials.json')
+        import os
+        import streamlit as st
         
-        gc = gspread.service_account(filename=credentials_path)
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
+        if "gspread_credentials" in st.secrets:
+            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+        else:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            credentials_path = os.path.join(current_dir, 'credentials.json')
+            gc = gspread.service_account(filename=credentials_path)
+        # --------------------------------------------------------
+
         # Mở bằng SPREADSHEET_ID chung để đảm bảo đồng bộ đúng file
         sh = gc.open_by_key(SPREADSHEET_ID) 
         
