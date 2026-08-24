@@ -75,19 +75,12 @@ def load_data_from_sheets():
         import pandas as pd
         import os
         import streamlit as st
-        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC TRỰC TIẾP CẤU TRÚC TOML PHẲNG) ---
         try:
-            if "gspread_json" in st.secrets:
-                raw_json_str = st.secrets["gspread_json"]
-                # Sửa lỗi ký tự điều khiển xuống dòng trực tiếp trong chuỗi JSON thô
-                if "\n" in raw_json_str:
-                    raw_json_str = raw_json_str.replace("\n", "\\n")
-                # Đảm bảo các từ khóa cấu trúc TOML/JSON không bị hỏng
-                raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
-                
-                creds_dict = json.loads(raw_json_str)
+            if "gspread_credentials" in st.secrets:
+                # Đọc trực tiếp từ cấu trúc bảng phẳng của Streamlit Secrets, an toàn tuyệt đối
+                creds_dict = dict(st.secrets["gspread_credentials"])
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
                 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -155,16 +148,10 @@ def append_to_sheet(row_data):
         import gspread
         import os
         import streamlit as st
-        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
-        if "gspread_json" in st.secrets:
-            raw_json_str = st.secrets["gspread_json"]
-            if "\n" in raw_json_str:
-                raw_json_str = raw_json_str.replace("\n", "\\n")
-            raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
-            
-            creds_dict = json.loads(raw_json_str)
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC TRỰC TIẾP CẤU TRÚC TOML PHẲNG) ---
+        if "gspread_credentials" in st.secrets:
+            creds_dict = dict(st.secrets["gspread_credentials"])
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -208,19 +195,11 @@ def load_users_from_sheets():
         import gspread
         import os
         import streamlit as st
-        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT ĐỒNG BỘ TOML MỚI ---
         try:
-            if "gspread_json" in st.secrets:
-                raw_json_str = st.secrets["gspread_json"]
-                # Sửa lỗi ký tự điều khiển xuống dòng trực tiếp trong chuỗi JSON thô
-                if "\n" in raw_json_str:
-                    raw_json_str = raw_json_str.replace("\n", "\\n")
-                # Đảm bảo các từ khóa cấu trúc TOML/JSON không bị hỏng
-                raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
-                
-                creds_dict = json.loads(raw_json_str)
+            if "gspread_credentials" in st.secrets:
+                creds_dict = dict(st.secrets["gspread_credentials"])
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
                 # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
@@ -257,16 +236,10 @@ def save_user_to_sheets(username, password, company, role, phone):
         import gspread
         import os
         import streamlit as st
-        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
-        if "gspread_json" in st.secrets:
-            raw_json_str = st.secrets["gspread_json"]
-            if "\n" in raw_json_str:
-                raw_json_str = raw_json_str.replace("\n", "\\n")
-            raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
-            
-            creds_dict = json.loads(raw_json_str)
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT ĐỒNG BỘ TOML MỚI ---
+        if "gspread_credentials" in st.secrets:
+            creds_dict = dict(st.secrets["gspread_credentials"])
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
