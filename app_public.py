@@ -77,14 +77,19 @@ def load_data_from_sheets():
         import streamlit as st
         import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ SỬA: ĐỌC THEO CHUỖI JSON MỚI) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
         try:
             if "gspread_json" in st.secrets:
-                # Giải mã chuỗi text JSON từ Secrets thành dữ liệu Dict chuẩn cho Google API
-                creds_dict = json.loads(st.secrets["gspread_json"])
+                raw_json_str = st.secrets["gspread_json"]
+                # Sửa lỗi ký tự điều khiển xuống dòng trực tiếp trong chuỗi JSON thô
+                if "\n" in raw_json_str:
+                    raw_json_str = raw_json_str.replace("\n", "\\n")
+                # Đảm bảo các từ khóa cấu trúc TOML/JSON không bị hỏng
+                raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
+                
+                creds_dict = json.loads(raw_json_str)
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
-                # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 credentials_path = os.path.join(current_dir, 'credentials.json')
                 gc = gspread.service_account(filename=credentials_path)
@@ -126,13 +131,10 @@ def load_data_from_sheets():
             # TIẾN HÀNH LỌC DỮ LIỆU THEO PHÂN QUYỀN USER ĐĂNG NHẬP
             user_info = st.session_state['user_info']
             if user_info["company"] == "ALL_COMPANIES":
-                # Tài khoản Admin tối cao được quyền xem hết dự án của mọi công ty
                 df_filtered = df_all.copy()
             else:
-                # Công ty nào đăng nhập chỉ lọc đúng dòng chứa mã của công ty đó
                 df_filtered = df_all[df_all["Công ty"] == user_info["company"]].copy()
                 
-            # Sắp xếp tăng dần theo ID dự án
             df_filtered = df_filtered.sort_values(by="ID", ascending=True).reset_index(drop=True)
             st.session_state["projects"] = df_filtered
             return True
@@ -153,11 +155,16 @@ def append_to_sheet(row_data):
         import gspread
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
-        if "gspread_credentials" in st.secrets:
-            import json
-            creds_dict = json.loads(st.secrets["gspread_json"])
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
+        if "gspread_json" in st.secrets:
+            raw_json_str = st.secrets["gspread_json"]
+            if "\n" in raw_json_str:
+                raw_json_str = raw_json_str.replace("\n", "\\n")
+            raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
+            
+            creds_dict = json.loads(raw_json_str)
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -165,16 +172,14 @@ def append_to_sheet(row_data):
             gc = gspread.service_account(filename=credentials_path)
         # --------------------------------------------------------
 
-        # Mở bằng SPREADSHEET_ID chung để đảm bảo đồng bộ đúng file
         sh = gc.open_by_key(SPREADSHEET_ID) 
-        
         worksheet = sh.worksheet("datacongtrinh")
         worksheet.append_row(row_data)
         return True 
         
     except Exception as e:
         print(f"Lỗi đồng bộ chi tiết: {e}") 
-        return False 
+        return False
 
 # ============================================================================
 # CẤU HÌNH GỬI EMAIL SMTP (THAY THÔNG TIN CỦA BẠN VÀO ĐÂY)
@@ -205,11 +210,17 @@ def load_users_from_sheets():
         import streamlit as st
         import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC THEO CHUỖI JSON MỚI TRỰC TUYẾN) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
         try:
             if "gspread_json" in st.secrets:
-                # Giải mã chuỗi text JSON từ Secrets thành dữ liệu Dict chuẩn cho Google API
-                creds_dict = json.loads(st.secrets["gspread_json"])
+                raw_json_str = st.secrets["gspread_json"]
+                # Sửa lỗi ký tự điều khiển xuống dòng trực tiếp trong chuỗi JSON thô
+                if "\n" in raw_json_str:
+                    raw_json_str = raw_json_str.replace("\n", "\\n")
+                # Đảm bảo các từ khóa cấu trúc TOML/JSON không bị hỏng
+                raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
+                
+                creds_dict = json.loads(raw_json_str)
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
                 # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
@@ -238,18 +249,24 @@ def load_users_from_sheets():
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
     except Exception as e:
         st.error(f"⚠️ Lỗi tự động tải danh sách tài khoản bản quyền: {e}")
-    pass
+
+
 def save_user_to_sheets(username, password, company, role, phone):
     """Ghi trực tiếp tài khoản mới được kích hoạt OTP thành công xuống Google Sheet vĩnh viễn"""
     try:
         import gspread
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
-        if "gspread_credentials" in st.secrets:
-            import json
-            creds_dict = json.loads(st.secrets["gspread_json"])
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ KHẮC PHỤC LỖI KÝ TỰ ĐIỀU KHIỂN) ---
+        if "gspread_json" in st.secrets:
+            raw_json_str = st.secrets["gspread_json"]
+            if "\n" in raw_json_str:
+                raw_json_str = raw_json_str.replace("\n", "\\n")
+            raw_json_str = raw_json_str.replace('\\n"', '"').replace('"\\n', '"').replace('{\\n', '{').replace('\\n}', '}')
+            
+            creds_dict = json.loads(raw_json_str)
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
