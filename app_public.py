@@ -636,29 +636,52 @@ else:
 
                     # XỬ LÝ LƯU FILE ẢNH VÀO FOLDER "image" CỦA CHƯƠNG TRÌNH TRÊN MÁY TÍNH
                     if uploaded_files:
-                        with st.spinner("Đang lưu trữ ảnh cục bộ về máy tính local..."):
+                        with st.spinner("Đang xử lý lưu trữ hình ảnh công trình..."):
                             for u_file in uploaded_files:
                                 try:
-                                    timestamp = int(time.time() * 1000)
-                                    project_id = current_row['ID']
-                                    img_name = f"{project_id}_{timestamp}_{u_file.name}"
-                                    full_save_path = os.path.join(IMAGE_DIR, img_name)
-                                
-                                    with open(full_save_path, "wb") as f:
-                                        f.write(u_file.getbuffer())
-                                        
-                                    relative_path = f"image/{img_name}"
-                                    current_images.append(relative_path)
+                                    # Kiểm tra xem chương trình đang chạy Online (Streamlit Cloud) hay Local
+                                    # Nếu có biến môi trường STREAMLIT_SERVER_PORT chứng tỏ đang chạy Online
+                                    is_online = os.environ.get("STREAMLIT_SERVER_PORT") is not None
+                                    
+                                    if is_online:
+                                        # Hướng xử lý ONLINE: Mã hóa ảnh sang chuỗi Base64 để lưu thẳng lên Google Sheet
+                                        import base64
+                                        file_bytes = u_file.getbuffer()
+                                        encoded_img = base64.b64encode(file_bytes).decode("utf-8")
+                                        # Tạo chuỗi dữ liệu ảnh chuẩn hiển thị HTML/Streamlit
+                                        data_url = f"data:{u_file.type};base64,{encoded_img}"
+                                        current_images.append(data_url)
+                                    else:
+                                        # Hướng xử lý LOCAL: Lưu file vào thư mục image trên máy tính như cũ
+                                        timestamp = int(time.time() * 1000)
+                                        project_id = current_row['ID']
+                                        img_name = f"{project_id}_{timestamp}_{u_file.name}"
+                                        full_save_path = os.path.join(IMAGE_DIR, img_name)
+                                    
+                                        with open(full_save_path, "wb") as f:
+                                            f.write(u_file.getbuffer())
+                                            
+                                        relative_path = f"image/{img_name}"
+                                        current_images.append(relative_path)
                                 except Exception as e:
                                     st.error(f"Lỗi lưu file ảnh {u_file.name}: {e}")
 
-                    # Gom tất cả các link ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
+                    # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
                     today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
-
+                    # ============================================================================
+                    # ĐỒNG BỘ DỮ LIỆU LÊN GOOGLE SHEET (SỬ DỤNG STREAMLIT SECRETS)
+                    # ============================================================================
                     try:
                         import gspread
-                        gc = gspread.service_account(filename=os.path.join(MAIN_DIR, 'credentials.json'))
+                        
+                        # Đọc cấu hình bảo mật trực tiếp từ hệ thống Streamlit Secrets an toàn
+                        try:
+                            gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+                        except Exception as secret_err:
+                            # Phương án dự phòng nếu chạy ở máy cá nhân (Local) chưa cài Secrets thì tìm file json cứng
+                            gc = gspread.service_account(filename=os.path.join(MAIN_DIR, 'credentials.json'))
+                            
                         sh = gc.open_by_key(SPREADSHEET_ID)
                         
                         # Luôn gọi tab chung duy nhất theo đúng cấu trúc Cách 2
@@ -682,7 +705,12 @@ else:
                         
                         # Cập nhật vùng dữ liệu từ cột A đến cột I tương ứng 9 trường thông tin
                         worksheet.update(f"A{sheet_row_idx}:I{sheet_row_idx}", [updated_row_values])
-                        st.success("🎉 Cập nhật thành công! Ảnh đã được cất vào folder 'image' local của máy tính.")
+                        
+                        if os.environ.get("STREAMLIT_SERVER_PORT") is not None:
+                            st.success("🎉 Cập nhật thành công! Dữ liệu và hình ảnh đã được mã hóa lưu trữ an toàn trực tuyến.")
+                        else:
+                            st.success("🎉 Cập nhật thành công! Ảnh đã được cất vào folder 'image' local của máy tính.")
+                            
                         load_data_from_sheets()
                         st.rerun()
                     except Exception as sheet_err:
