@@ -75,12 +75,17 @@ def load_data_from_sheets():
         import pandas as pd
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC TRỰC TIẾP CẤU TRÚC TOML PHẲNG) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
         try:
-            if "gspread_credentials" in st.secrets:
-                # Đọc trực tiếp từ cấu trúc bảng phẳng của Streamlit Secrets, an toàn tuyệt đối
-                creds_dict = dict(st.secrets["gspread_credentials"])
+            if "gspread_json" in st.secrets:
+                raw_json_str = st.secrets["gspread_json"]
+                # Phân tách chuỗi json sang từ điển Python tạm thời
+                creds_dict = json.loads(raw_json_str, strict=False)
+                # Thay thế ký tự chuỗi \n ẩn thành ký tự xuống dòng thực tế cho mã PEM của Google
+                if "private_key" in creds_dict:
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
                 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -148,10 +153,14 @@ def append_to_sheet(row_data):
         import gspread
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐỌC TRỰC TIẾP CẤU TRÚC TOML PHẲNG) ---
-        if "gspread_credentials" in st.secrets:
-            creds_dict = dict(st.secrets["gspread_credentials"])
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
+        if "gspread_json" in st.secrets:
+            raw_json_str = st.secrets["gspread_json"]
+            creds_dict = json.loads(raw_json_str, strict=False)
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -195,11 +204,17 @@ def load_users_from_sheets():
         import gspread
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT ĐỒNG BỘ TOML MỚI ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
         try:
-            if "gspread_credentials" in st.secrets:
-                creds_dict = dict(st.secrets["gspread_credentials"])
+            if "gspread_json" in st.secrets:
+                raw_json_str = st.secrets["gspread_json"]
+                # Phân tách chuỗi json sang từ điển Python tạm thời
+                creds_dict = json.loads(raw_json_str, strict=False)
+                # Thay thế ký tự chuỗi \n ẩn thành ký tự xuống dòng thực tế cho mã PEM của Google
+                if "private_key" in creds_dict:
+                    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
                 # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
@@ -236,10 +251,14 @@ def save_user_to_sheets(username, password, company, role, phone):
         import gspread
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT ĐỒNG BỘ TOML MỚI ---
-        if "gspread_credentials" in st.secrets:
-            creds_dict = dict(st.secrets["gspread_credentials"])
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT CHỐNG LỖI ASN.1 EXTRA DATA ---
+        if "gspread_json" in st.secrets:
+            raw_json_str = st.secrets["gspread_json"]
+            creds_dict = json.loads(raw_json_str, strict=False)
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             gc = gspread.service_account_from_dict(creds_dict)
         else:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -255,7 +274,6 @@ def save_user_to_sheets(username, password, company, role, phone):
     except Exception as e:
         st.error(f"❌ Lỗi ghi tài khoản vào Google Sheet: {e}")
         return False
-    pass
 #================================================================================================================
 # LẤY ẢNH TỪ ĐOẠN MÃ HÓA STRING
 def display_base64_image(base64_string):
