@@ -210,14 +210,11 @@ def load_users_from_sheets():
         try:
             if "gspread_json" in st.secrets:
                 raw_json_str = st.secrets["gspread_json"]
-                # Phân tách chuỗi json sang từ điển Python tạm thời
                 creds_dict = json.loads(raw_json_str, strict=False)
-                # Thay thế ký tự chuỗi \n ẩn thành ký tự xuống dòng thực tế cho mã PEM của Google
                 if "private_key" in creds_dict:
                     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
                 gc = gspread.service_account_from_dict(creds_dict)
             else:
-                # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 credentials_path = os.path.join(current_dir, 'credentials.json')
                 gc = gspread.service_account(filename=credentials_path)
@@ -237,8 +234,12 @@ def load_users_from_sheets():
         all_values = worksheet.get_all_values()
         if len(all_values) > 1:
             for row in all_values[1:]:
+                # CHỈNH SỬA CHUẨN XÁC: Gọi đúng vị trí các cột dữ liệu trong Google Sheet
                 if len(row) >= 4:
-                    u, p, c, r = str(row[0]).strip(), str(row[1]).strip(), str(row[2]).strip(), str(row[3]).strip()
+                    u = str(row[0]).strip() # Cột A: Tài khoản
+                    p = str(row[1]).strip() # Cột B: Mật khẩu
+                    c = str(row[2]).strip() # Cột C: Công ty
+                    r = str(row[3]).strip() # Cột D: Quyền hạn
                     if u:
                         DATA_USERS[u] = {"password": p, "company": c, "role": r}
     except Exception as e:
