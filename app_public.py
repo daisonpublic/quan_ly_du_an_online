@@ -75,19 +75,23 @@ def load_data_from_sheets():
         import pandas as pd
         import os
         import streamlit as st
+        import json
         
-        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ƯU TIÊN ONLINE SECRETS) ---
+        # --- CẤU HÌNH KẾT NỐI BẢO MẬT (ĐÃ SỬA: ĐỌC THEO CHUỖI JSON MỚI) ---
         try:
-            if "gspread_credentials" in st.secrets:
-                gc = gspread.service_account_from_dict(dict(st.secrets["gspread_credentials"]))
+            if "gspread_json" in st.secrets:
+                # Giải mã chuỗi text JSON từ Secrets thành dữ liệu Dict chuẩn cho Google API
+                creds_dict = json.loads(st.secrets["gspread_json"])
+                gc = gspread.service_account_from_dict(creds_dict)
             else:
+                # Dự phòng tìm file cứng nếu chạy ở máy cá nhân Local
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 credentials_path = os.path.join(current_dir, 'credentials.json')
                 gc = gspread.service_account(filename=credentials_path)
         except Exception as auth_err:
             st.error(f"❌ Lỗi xác thực tài khoản kết nối Google Sheet: {auth_err}")
             return False
-        # --------------------------------------------------------
+        # -----------------------------------------------------------------
 
         sh = gc.open_by_key(SPREADSHEET_ID)
         
