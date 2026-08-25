@@ -729,8 +729,8 @@ else:
                             
                             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                             
-                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
-                            url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                            # VIẾT THẲNG URL CHUẨN XÁC VÀO ĐÂY ĐỂ TRÁNH LỖI PHÂN GIẢI TÊN MIỀN
+                            url_api = "https://imgbb.com"
 
                             for u_file in uploaded_files:
                                 try:
