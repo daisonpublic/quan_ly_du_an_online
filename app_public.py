@@ -524,76 +524,105 @@ else:
         if "projects" in st.session_state and st.session_state["projects"].empty:
             st.info("Hệ thống chưa có dữ liệu công trình nào của công ty bạn. Vui lòng thêm mới!")
         else:
-            df_display = st.session_state["projects"].copy()
+            # 1. LẤY DỮ LIỆU GỐC TỪ SESSION STATE
+            df_raw = st.session_state["projects"].copy()
 
-            if "Miêu tả" not in df_display.columns:
-                df_display["Miêu tả"] = ""
-            else:
-                df_display["Miêu tả"] = df_display["Miêu tả"].apply(
-                    lambda x: "" if str(x).strip().lower() in ["nan", "", "none"] else str(x)
-                )
+            # Làm sạch dữ liệu chuỗi trống để tránh lỗi gộp nhóm
+            for col in ["Miêu tả", "Ảnh"]:
+                if col in df_raw.columns:
+                    df_raw[col] = df_raw[col].astype(str).apply(
+                        lambda x: "" if x.strip().lower() in ["nan", "", "none", "null"] else x.strip()
+                    )
+                else:
+                    df_raw[col] = ""
 
-            if "Ảnh" not in df_display.columns:
-                df_display["Ảnh"] = ""
-            else:
-                def get_first_image(x):
-                    chuoi_anh = str(x).strip()
-                    if chuoi_anh.lower() in ["nan", "none", ""]:
-                        return ""
-                    # Tách chuỗi bằng dấu phẩy và lấy phần tử đầu tiên
-                    danh_sach_anh = [p.strip() for p in chuoi_anh.split(",") if p.strip()]
-                    return danh_sach_anh[0] if danh_sach_anh else ""
-                df_display["Ảnh"] = df_display["Ảnh"].apply(get_first_image)
-                   
+            # 2. XỬ LÝ GỘP NHÓM (GROUPBY) THEO ID ĐỂ BẢNG TỔNG QUAN CHỈ HIỂN THỊ 1 DÒNG DUY NHẤT
+            # Sắp xếp theo ID tăng dần và theo dòng nhập trên sheet (dòng dưới là mới nhất)
+            df_raw = df_raw.reset_index() 
+            
+            # Hàm gộp để gom tất cả các chuỗi ảnh của cùng 1 ID lại với nhau, ngăn cách bằng dấu phẩy
+            def join_images(series):
+                valid_imgs = [str(img).strip() for img in series if str(img).strip() and str(img).strip().lower() != "none"]
+                return ",".join(valid_imgs) if valid_imgs else ""
+
+            # Hàm gộp để lấy miêu tả chi tiết: nối các mốc ngày lại hoặc lấy mốc mới nhất
+            def join_descriptions(series):
+                valid_descs = [str(d).strip() for d in series if str(d).strip()]
+                return " | ".join(valid_descs) if valid_descs else ""
+
+            # Thực hiện Gom nhóm theo ID công trình
+            df_display = df_raw.groupby("ID").agg({
+                "Công ty": "last",          # Lấy thông tin dòng mới nhất
+                "Công trình": "last",      # Lấy tên công trình dòng mới nhất
+                "Tình trạng": "last",      # Lấy trạng thái mới nhất
+                "Tiến độ (%)": "last",     # Lấy số % mới nhất
+                "Người phụ trách": "last", # Lấy người báo cáo mới nhất
+                "Cập nhật cuối": "last",   # Lấy ngày cập nhật mới nhất
+                "Miêu tả": join_descriptions, # Gom tất cả nội dung miêu tả nhật ký
+                "Ảnh": join_images          # GOM TOÀN BỘ ẢNH CỦA CÁC DÒNG VÀO ĐÂY
+            }).reset_index()
+
+            # Tạo cột ảnh đại diện hiển thị duy nhất 1 ảnh đầu tiên lên bảng st.dataframe
+            def get_avatar_image(x):
+                val = str(x).strip()
+                if not val:
+                    return ""
+                parts = [p.strip() for p in val.split(",") if p.strip()]
+                return parts[0] if parts else ""
+                
+            df_table = df_display.copy()
+            df_table["Ảnh"] = df_table["Ảnh"].apply(get_avatar_image)
 
             show_columns = ["ID", "Công trình", "Tình trạng", "Tiến độ (%)", "Người phụ trách", "Cập nhật cuối", "Miêu tả", "Ảnh"]
-            valid_columns = [col for col in show_columns if col in df_display.columns]
+            valid_columns = [col for col in show_columns if col in df_table.columns]
 
-            # Hiển thị bảng tổng hợp danh sách công trình
+            # Hiển thị bảng tổng hợp (Bây giờ mỗi ID chỉ còn duy nhất 1 hàng sạch sẽ!)
             st.dataframe(
-                df_display[valid_columns],
+                df_table[valid_columns],
                 width='stretch',
                 hide_index=True,
                 column_config={
-                    "Ảnh": st.column_config.ImageColumn("Ảnh thực tế", help="Ảnh chụp thực tế từ công trường"),
-                    "Miêu tả": st.column_config.Column("Miêu tả chi tiết", width="large", required=False),
+                    "Ảnh": st.column_config.ImageColumn("Ảnh đại diện", help="Ảnh chụp thực tế mới nhất từ công trường"),
+                    "Miêu tả": st.column_config.Column("Lịch sử nhật ký công trường", width="large"),
                 },
             )
             
-            # --- KHU VỰC XEM CHI TIẾT BÁO CÁO CÔNG TRƯỜNG (HIỂN THỊ ĐẦY ĐỦ 100%) ---
+            # --- KHU VỰC XEM CHI TIẾT BÁO CÁO CÔNG TRƯỜNG (HIỂN THỊ ĐẦY ĐỦ TẤT CẢ ẢNH ĐÃ GÔM) ---
             st.markdown("### 🔍 Chi tiết báo cáo công trường")
         
-            # Vòng lặp duyệt qua toàn bộ danh sách công trình của công ty để hiển thị hộp thả xuống
             for idx, row in df_display.iterrows():
                 with st.expander(f"🚧 [{row['ID']}] {row['Công trình']} (Tiến độ: {row['Tiến độ (%)']}%)"):
-                    col_left, col_right = st.columns([2, 1]) # Tỷ lệ 2 phần chữ, 1 phần ảnh
+                    col_left, col_right = st.columns([2, 1])
                 
                     with col_left:
-                        st.markdown(f"**Trạng thái:** {row['Tình trạng']}")
-                        st.markdown(f"**Người phụ trách:** {row['Người phụ trách']}")
+                        st.markdown(f"**Trạng thái mới nhất:** {row['Tình trạng']}")
+                        st.markdown(f"**Người phụ trách mới nhất:** {row['Người phụ trách']}")
                         st.markdown(f"**Cập nhật cuối:** {row['Cập nhật cuối']}")
-                        st.markdown("**Nội dung miêu tả chi tiết:**")
+                        st.markdown("**Tổng hợp nội dung nhật ký công trường:**")
                     
                         txt_mieu_ta = str(row["Miêu tả"]).strip()
-                        if txt_mieu_ta and txt_mieu_ta.lower() != "nan":
-                            st.info(txt_mieu_ta)
+                        if txt_mieu_ta:
+                            # Tách các đoạn miêu tả cũ bằng dấu gạch đứng để người dùng dễ đọc dòng thời gian
+                            for part_desc in txt_mieu_ta.split(" | "):
+                                if part_desc.strip():
+                                    st.info(part_desc.strip())
                         else:
-                            st.caption("*(Chưa có nội dung miêu tả chi tiết cho công trình này)*")
+                            st.caption("*(Chưa có nội dung miêu tả chi tiết)*")
                     
                     with col_right:
                         raw_anh = str(row["Ảnh"]).strip()
-                        if raw_anh and raw_anh.lower() != "nan":
-                            # Tách chuỗi ảnh cũ thành danh sách các link ngăn cách bởi dấu phẩy
+                        if raw_anh:
+                            # Bóc tách chuỗi ảnh tổng hợp đã được gộp từ nhiều dòng trên Google Sheet
                             img_list = [img.strip() for img in raw_anh.split(",") if img.strip()]
                             
                             if img_list:
-                                st.markdown("**📸 Ảnh thực tế:**")
-                                # Duyệt qua và hiển thị từng ảnh trong danh sách ảnh
-                                for single_img in img_list:
-                                    if single_img.startswith("http") or os.path.exists(single_img):
-                                        st.image(single_img, width='stretch')
-                                    else:
-                                        st.caption(f"⚠️ Không thể tải ảnh: {single_img[:20]}...")
+                                st.markdown(f"**📸 Bộ sưu tập ảnh thực tế ({len(img_list)} ảnh):**")
+                                # Tạo lưới hiển thị 2 ảnh một dòng cho gọn gàng bên trong expander
+                                sub_cols = st.columns(2)
+                                for i, single_img in enumerate(img_list):
+                                    with sub_cols[i % 2]:
+                                        if single_img.startswith("data:image"):
+                                            st.image(single_img, use_container_width=True)
                             else:
                                 st.caption("*(Chưa có ảnh thực tế)*")
                         else:
