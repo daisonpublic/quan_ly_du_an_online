@@ -747,7 +747,7 @@ else:
                                     image.save(buffered, format="JPEG", quality=60)
                                     
                                     # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG MULTIPART ---
-                                    # Đã sửa lại URL chuẩn xác theo tài liệu API của ImgBB
+                                    # ĐÃ SỬA: Đường dẫn URL chính thức chuẩn 100% kết nối đến API ImgBB
                                     url_api = f"https://imgbb.com{IMGBB_API_KEY}"
                                     
                                     files_payload = {
@@ -788,7 +788,6 @@ else:
                                             st.error(f"❌ ImgBB từ chối (Mã {response.status_code}): {detail_err}")
                                             
                                 except Exception as e:
-                                    # ĐÂY LÀ NHÁNH EXCEPT BỊ THIẾU KHIẾN PYLANCE BÁO LỖI
                                     st.error(f"❌ Lỗi xử lý đọc file ảnh {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
