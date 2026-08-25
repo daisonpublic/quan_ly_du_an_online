@@ -735,7 +735,7 @@ else:
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: NÉN ẢNH ---
+                                    # --- BƯỚC 1: NÉN ẢNH VÀ CHUYỂN ĐỔI ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
@@ -745,22 +745,23 @@ else:
                                     
                                     buffered = io.BytesIO()
                                     image.save(buffered, format="JPEG", quality=60)
-                                    base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
                                     
-                                    # --- BƯỚC 2: CẤU HÌNH GỬI API ---
-                                    payload = {
-                                        "key": IMGBB_API_KEY,
-                                        "image": base64_image
+                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG MULTIPART ---
+                                    # Đã sửa lại URL chuẩn xác theo tài liệu API của ImgBB
+                                    url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                                    
+                                    files_payload = {
+                                        "image": ("image.jpg", buffered.getvalue(), "image/jpeg")
                                     }
                                     
                                     headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                                     }
                                     
                                     try:
                                         response = requests.post(
-                                            "https://imgbb.com", 
-                                            data=payload, 
+                                            url_api, 
+                                            files=files_payload, 
                                             headers=headers, 
                                             timeout=30,
                                             verify=False
@@ -769,7 +770,7 @@ else:
                                         st.error(f"❌ Không thể kết nối tới server ImgBB: {net_err}")
                                         continue
                                     
-                                    # --- BƯỚC 3: XỬ LÝ KẾT QUẢ ---
+                                    # --- BƯỚC 3: XỬ LÝ KẾT QUẢ TRẢ VỀ ---
                                     if response is not None:
                                         if response.status_code == 200:
                                             try:
@@ -777,20 +778,18 @@ else:
                                                 direct_url = res_json["data"]["url"]
                                                 current_images.append(direct_url)
                                             except Exception:
-                                                # Nếu lỗi định dạng lạ, tìm xem trong chuỗi HTML có thông báo lỗi ẩn không
-                                                raw_text = response.text
-                                                error_msg = "Không xác định"
-                                                if "error" in raw_text.lower():
-                                                    # Cố gắng cắt ra một đoạn ngắn xung quanh chữ lỗi để hiển thị
-                                                    idx = raw_text.lower().find("error")
-                                                    error_msg = raw_text[idx:idx+150]
-                                                st.error(f"❌ ImgBB trả về trang lỗi HTML. Lý do ẩn: {error_msg}")
+                                                st.error(f"❌ ImgBB trả về định dạng lạ: {response.text[:100]}")
                                         else:
-                                            # Trường hợp các mã lỗi 400, 403, 500
-                                            st.error(f"❌ Server ImgBB từ chối (Mã {response.status_code}). Vui lòng kiểm tra lại chính xác API Key!")
+                                            try:
+                                                error_json = response.json()
+                                                detail_err = error_json["error"]["message"]
+                                            except Exception:
+                                                detail_err = response.text[:100]
+                                            st.error(f"❌ ImgBB từ chối (Mã {response.status_code}): {detail_err}")
                                             
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi xử lý ảnh {u_file.name}: {e}")
+                                    # ĐÂY LÀ NHÁNH EXCEPT BỊ THIẾU KHIẾN PYLANCE BÁO LỖI
+                                    st.error(f"❌ Lỗi xử lý đọc file ảnh {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
