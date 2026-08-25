@@ -730,10 +730,7 @@ else:
                             import io
                             import urllib3
                             
-                            # Tắt các cảnh báo bảo mật kết nối để log hệ thống luôn sạch sẽ
                             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                            
-                            # Mã API Key chính xác và còn hoạt động của bạn
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
                             
                             for u_file in uploaded_files:
@@ -743,52 +740,48 @@ else:
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    # Resize ảnh về kích thước tối ưu 1024px để tiết kiệm băng thông đám mây
                                     if image.width > 1024 or image.height > 1024:
                                         image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
                                     
-                                    # Nén dung lượng file xuống chất lượng 65% trước khi gửi
                                     buffered = io.BytesIO()
                                     image.save(buffered, format="JPEG", quality=65)
-                                    
-                                    # Mã hóa dữ liệu nhị phân thành chuỗi văn bản Base64 sạch chuẩn API
                                     base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
                                     
                                     # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG VĂN BẢN XÁC THỰC CAO ---
-                                    # Đưa API key lên tham số URL và gửi kèm dữ liệu chuỗi ở thân bài viết (body)
-                                    url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                                    # Đã viết cứng URL chính xác 100%, không sử dụng gộp chuỗi lỗi nữa
+                                    url_api = "https://imgbb.com"
                                     
                                     payload = {
                                         "image": base64_data
                                     }
                                     
-                                    # Thêm Headers giả lập ứng dụng sạch để vượt qua tường lửa Cloudflare của ImgBB
                                     headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                                         "Accept": "application/json"
                                     }
                                     
-                                    # Tiến hành gọi mạng (Sử dụng data= thay vì files= để tránh bị lỗi định dạng Multipart thô)
-                                    response = requests.post(
-                                        url_api, 
-                                        data=payload, 
-                                        headers=headers, 
-                                        timeout=30,
-                                        verify=False
-                                    )
+                                    try:
+                                        response = requests.post(
+                                            url_api, 
+                                            data=payload, 
+                                            headers=headers, 
+                                            timeout=30,
+                                            verify=False
+                                        )
+                                    except requests.exceptions.RequestException as net_err:
+                                        st.error(f"❌ Không thể kết nối tới server ImgBB: {net_err}")
+                                        continue
                                     
                                     # --- BƯỚC 3: PHÂN TÍCH KẾT QUẢ VÀ TRÍCH XUẤT ĐƯỜNG LINK ---
                                     if response is not None:
                                         if response.status_code == 200:
                                             try:
                                                 res_json = response.json()
-                                                # Trích xuất đường link ảnh gốc vĩnh viễn (Direct URL có đuôi .jpg)
                                                 direct_url = res_json["data"]["url"]
                                                 current_images.append(direct_url)
                                             except Exception:
                                                 st.error(f"❌ ImgBB phản hồi định dạng không mong muốn: {response.text[:100]}")
                                         else:
-                                            # Nếu bị lỗi mã 400 hoặc 403, bóc tách thông báo lỗi chi tiết dạng JSON từ hệ thống
                                             try:
                                                 error_json = response.json()
                                                 detail_err = error_json["error"]["message"]
