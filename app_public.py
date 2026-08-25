@@ -715,8 +715,8 @@ else:
                 
                 if submitted:
                     current_images = []
-                    # Giữ lại danh sách ảnh từ trước
-                    if not pd.isna(current_row["Toggle"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
+                    # SỬA LỖI: Đổi "Toggle" thành "Ảnh" để khớp chính xác dữ liệu Pandas
+                    if not pd.isna(current_row["Ảnh"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
                         current_images = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
 
                     if uploaded_files:
@@ -727,11 +727,9 @@ else:
                             import io
                             import urllib3
                             
-                            # Tắt cảnh báo SSL trên môi trường mạng đám mây
                             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                             
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
-                            # SỬA LỖI: Đường dẫn API nhận dữ liệu chuẩn của ImgBB
                             url_api = f"https://imgbb.com{IMGBB_API_KEY}"
 
                             for u_file in uploaded_files:
