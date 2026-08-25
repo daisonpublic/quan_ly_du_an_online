@@ -731,66 +731,44 @@ else:
                             import io
                             
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
-                            url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                            url_api = "https://api.imgbb.com/1/upload"      
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ĐỂ ĐƯỜNG TRUYỀN NHẸ HƠN ---
+                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
-                                    
-                                    # Giới hạn chiều rộng/cao tối đa 1024px để ảnh nét mà dung lượng nhẹ
+
                                     if image.width > 1024 or image.height > 1024:
                                         image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-                                    
+
                                     buffered = io.BytesIO()
                                     image.save(buffered, format="JPEG", quality=65)
                                     img_bytes = buffered.getvalue()
-                                    
-                                    # --- BƯỚC 2: TỰ DỰNG MULTIPART FORM-DATA THUẦN TÚY (BẢN VÁ VƯỢT CLOUDFLARE) ---
-                                    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
-                                    
-                                    # Tạo phần thân dữ liệu (body) theo đúng chuẩn trình duyệt Chrome gửi đi
-                                    body = []
-                                    body.append(f"--{boundary}".encode('utf-8'))
-                                    body.append(f'Content-Disposition: form-data; name="image"; filename="image.jpg"'.encode('utf-8'))
-                                    body.append(b'Content-Type: image/jpeg')
-                                    body.append(b'')
-                                    body.append(img_bytes)
-                                    body.append(f"--{boundary}--".encode('utf-8'))
-                                    body.append(b'')
-                                    
-                                    data_payload = b'\r\n'.join(body)
-                                    
-                                    # Cấu hình Header giả lập trình duyệt thật cực kỳ nghiêm ngặt
-                                    headers = {
-                                        "Content-Type": f"multipart/form-data; boundary={boundary}",
-                                        "Content-Length": str(len(data_payload)),
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                                        "Accept": "application/json, text/plain, */*"
+
+                                    # --- BƯỚC 2: MÃ HÓA BASE64 VÀ GỬI LÊN IMGBB ---
+                                    base64_image = base64.b64encode(img_bytes).decode("utf-8")
+
+                                    payload = {
+                                        "key": IMGBB_API_KEY,
+                                        "image": base64_image,
                                     }
-                                    
-                                    # --- BƯỚC 3: GỬI YÊU CẦU MẠNG BẰNG URLLIB (BỎ QUA THƯ VIỆN REQUESTS BỊ CHẶN) ---
-                                    req = urllib.request.Request(url_api, data=data_payload, headers=headers, method="POST")
-                                    
-                                    # Thực hiện kết nối và đọc kết quả trả về
-                                    with urllib.request.urlopen(req, timeout=30) as response:
-                                        res_body = response.read().decode('utf-8')
-                                        import json
-                                        res_json = json.loads(res_body)
-                                        
-                                        # Trích xuất đường dẫn URL ngắn (.jpg) lưu trữ vĩnh viễn
-                                        direct_url = res_json["data"]["url"]
-                                        current_images.append(direct_url)
-                                        
-                                except Exception as e:
-                                    # Nếu ImgBB trả lỗi, cố gắng hiển thị nội dung lỗi thật để xử lý
-                                    if hasattr(e, 'read'):
-                                        error_data = e.read().decode('utf-8')
-                                        st.error(f"❌ ImgBB từ chối file '{u_file.name}': {error_data[:150]}")
+
+                                    data = urllib.parse.urlencode(payload).encode("utf-8")
+                                    req = urllib.request.Request(url_api, data=data, method="POST")
+
+                                    with urllib.request.urlopen(req) as response:
+                                        res_data = json.loads(response.read().decode("utf-8"))
+                                    if res_data.get("success"):
+                                        img_url = res_data["data"]["url"]
+                                        st.success(f"Đẩy ảnh thành công: {img_url}")
+                                        st.image(img_url, width=300)
                                     else:
-                                        st.error(f"❌ Lỗi kết nối đẩy ảnh '{u_file.name}': {e}")
+                                        st.error("Lỗi từ hệ thống ImgBB.")
+
+                                except Exception as e:
+                                    st.error(f"Đã xảy ra lỗi khi xử lý ảnh: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
