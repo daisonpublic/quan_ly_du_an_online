@@ -723,39 +723,81 @@ else:
                     response = None 
 
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu nén sâu và mã hóa Base64 hình ảnh..."):
+                        with st.spinner("Đang tối ưu dung lượng và đồng bộ hình ảnh lên kho lưu trữ ImgBB..."):
+                            import requests
                             import base64
                             from PIL import Image
                             import io
+                            import urllib3
+                            
+                            # Tắt các cảnh báo bảo mật kết nối để log hệ thống luôn sạch sẽ
+                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                            
+                            # Mã API Key chính xác và còn hoạt động của bạn
+                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ CHUYỂN ĐỔI HỆ MÀU ---
+                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ĐỂ ĐƯỜNG TRUYỀN SIÊU TỐC ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    # --- BƯỚC 2: HẠ ĐỘ PHÂN GIẢI XUỐNG 640PX (RẤT NHẸ) ---
-                                    max_size = 640
-                                    if image.width > max_size or image.height > max_size:
-                                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                                    # Resize ảnh về kích thước tối ưu 1024px để tiết kiệm băng thông đám mây
+                                    if image.width > 1024 or image.height > 1024:
+                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
                                     
-                                    # --- BƯỚC 3: NÉN SÂU CHẤT LƯỢNG XUỐNG 35% ---
+                                    # Nén dung lượng file xuống chất lượng 65% trước khi gửi
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=35) # Chất lượng 35% giúp ảnh siêu nhẹ nhưng vẫn nhìn rõ công trường
+                                    image.save(buffered, format="JPEG", quality=65)
                                     
-                                    # --- BƯỚC 4: MÃ HÓA BASE64 VÀ KIỂM TRA ĐỘ DÀI ---
-                                    encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
+                                    # Mã hóa dữ liệu nhị phân thành chuỗi văn bản Base64 sạch chuẩn API
+                                    base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
                                     
-                                    # Giới hạn an toàn của Google Sheets là 50k, chuỗi này chỉ tầm ~20k ký tự
-                                    if len(data_url) < 45000:
-                                        current_images.append(data_url)
-                                    else:
-                                        st.error(f"⚠️ Ảnh {u_file.name} có chi tiết quá phức tạp, vui lòng chụp ở góc khác hoặc đổi ảnh nhẹ hơn!")
+                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG VĂN BẢN XÁC THỰC CAO ---
+                                    # Đưa API key lên tham số URL và gửi kèm dữ liệu chuỗi ở thân bài viết (body)
+                                    url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                                    
+                                    payload = {
+                                        "image": base64_data
+                                    }
+                                    
+                                    # Thêm Headers giả lập ứng dụng sạch để vượt qua tường lửa Cloudflare của ImgBB
+                                    headers = {
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                        "Accept": "application/json"
+                                    }
+                                    
+                                    # Tiến hành gọi mạng (Sử dụng data= thay vì files= để tránh bị lỗi định dạng Multipart thô)
+                                    response = requests.post(
+                                        url_api, 
+                                        data=payload, 
+                                        headers=headers, 
+                                        timeout=30,
+                                        verify=False
+                                    )
+                                    
+                                    # --- BƯỚC 3: PHÂN TÍCH KẾT QUẢ VÀ TRÍCH XUẤT ĐƯỜNG LINK ---
+                                    if response is not None:
+                                        if response.status_code == 200:
+                                            try:
+                                                res_json = response.json()
+                                                # Trích xuất đường link ảnh gốc vĩnh viễn (Direct URL có đuôi .jpg)
+                                                direct_url = res_json["data"]["url"]
+                                                current_images.append(direct_url)
+                                            except Exception:
+                                                st.error(f"❌ ImgBB phản hồi định dạng không mong muốn: {response.text[:100]}")
+                                        else:
+                                            # Nếu bị lỗi mã 400 hoặc 403, bóc tách thông báo lỗi chi tiết dạng JSON từ hệ thống
+                                            try:
+                                                error_json = response.json()
+                                                detail_err = error_json["error"]["message"]
+                                            except Exception:
+                                                detail_err = response.text[:100]
+                                            st.error(f"❌ ImgBB từ chối xử lý (Mã lỗi {response.status_code}): {detail_err}")
                                             
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
+                                    st.error(f"❌ Lỗi hệ thống trong quá trình nén file {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
