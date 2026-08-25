@@ -723,7 +723,7 @@ else:
                     if uploaded_files:
                         with st.spinner("Đang tải hình ảnh lên hệ thống đám mây ImgBB..."):
                             import requests
-                            
+                            import base64
                             # ĐIỀN MÃ API KEY CỦA BẠN VÀO ĐÂY
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
                             
@@ -731,17 +731,16 @@ else:
                                 try:
                                     # 1. Chuẩn bị file nhị phân để gửi qua giao thức POST HTTP
                                     file_bytes = u_file.getvalue()
+                                    base64_image = base64.b64encode(file_bytes).decode("utf-8")
+                                    # 2. Chuẩn bị payload dạng Form-Data (ImgBB nhận ảnh qua tham số 'image' dạng Base64)
                                     payload = {
                                         "key": IMGBB_API_KEY,
-                                        "expiration": 15552000 # (Tùy chọn) Tự động xóa sau 6 tháng để bảo mật, bỏ dòng này nếu muốn lưu vĩnh viễn
-                                    }
-                                    files = {
-                                        "image": (u_file.name, file_bytes)
+                                        "image": base64_image
                                     }
                                     
                                     # 2. Gọi API của ImgBB để upload ảnh lên mạng
-                                    response = requests.post("https://imgbb.com", data=payload, files=files, timeout=30)
-                                    
+                                    response = requests.post("https://imgbb.com", data=payload, timeout=30)
+                                    # 4. Kiểm tra phản hồi từ hệ thống
                                     if response.status_code == 200:
                                         res_json = response.json()
                                         # Lấy link ảnh trực tiếp (Direct URL kết thúc bằng đuôi .jpg/.png)
