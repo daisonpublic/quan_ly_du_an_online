@@ -536,39 +536,35 @@ else:
                 else:
                     df_raw[col] = ""
 
-            # 2. XỬ LÝ GỘP NHÓM (GROUPBY) THEO ID (BẢN VÁ SẠCH CHỮ - CHUẨN ẢNH)
+            # 2. XỬ LÝ GỘP NHÓM (GROUPBY) THEO ID (BẢN VÁ SỬA LỖI HIỂN THỊ HÌNH ẢNH TUYỆT ĐỐI)
             df_raw = df_raw.reset_index() 
             
-            # Hàm gộp ảnh: Lấy tất cả chuỗi Base64 hợp lệ, lọc bỏ tuyệt đối các chuỗi chữ rác hoặc ô trống
+            # Hàm gộp ảnh: CHỈ LẤY CHUỖI BASE64 HỢP LỆ, LOẠI BỎ 100% CHUỖI TRỐNG HOẶC RÁC HỆ THỐNG
             def join_images(series):
                 valid_imgs = []
                 for img_str in series:
                     img_clean = str(img_str).strip()
-                    # Chỉ lấy chuỗi bắt đầu bằng mã hóa Base64 chuẩn của ảnh
+                    # Bộ lọc nghiêm ngặt: Chỉ lấy những ô thực sự bắt đầu bằng mã hóa ảnh Base64 chuẩn
                     if img_clean and img_clean.startswith("data:image"):
+                        # Tách chuỗi nhỏ nếu trong ô chứa nhiều ảnh ngăn cách bởi dấu phẩy
                         sub_parts = [p.strip() for p in img_clean.split(",") if p.strip()]
-                        valid_imgs.extend(sub_parts)
+                        for p in sub_parts:
+                            if p.startswith("data:image") and p not in valid_imgs:
+                                valid_imgs.append(p)
                 return ",".join(valid_imgs) if valid_imgs else ""
 
-            # Hàm gộp miêu tả: Loại bỏ hoàn toàn sự trùng lặp và làm sạch ô trống
+            # Hàm gộp miêu tả: Giữ nguyên khối văn bản sạch, không trùng lặp
             def join_descriptions(series):
                 seen_blocks = set()
                 valid_blocks = []
-                
                 for d in series:
                     txt = str(d).strip()
-                    # Chặn đứng chuỗi rỗng, chuỗi rác hệ thống hoặc chuỗi chứa ảnh lọt vào cột miêu tả
                     if not txt or txt.lower() in ["nan", "none", "null", ""] or txt.startswith("data:image"):
                         continue
-                    
-                    # Chuẩn hóa khoảng trắng và ký tự xuống dòng để so khớp chính xác cấu trúc văn bản nhật ký
                     normalized_txt = " ".join(txt.split())
-                    
                     if normalized_txt and normalized_txt not in seen_blocks:
                         seen_blocks.add(normalized_txt)
-                        valid_blocks.append(txt) # Giữ nguyên văn bản gốc bao gồm cả dấu xuống dòng và dấu chấm tròn (bullet)
-                
-                # Phân tách các ngày báo cáo thực tế bằng chuỗi phân tách đặc biệt để tránh bị lỗi chia cắt ký tự tự nhiên
+                        valid_blocks.append(txt)
                 return " [SPLIT_DATE] ".join(valid_blocks) if valid_blocks else ""
 
             # Thực hiện Gom nhóm theo ID công trình
@@ -580,17 +576,17 @@ else:
                 "Người phụ trách": "last", 
                 "Cập nhật cuối": "last",   
                 "Miêu tả": join_descriptions, 
-                "Ảnh": join_images          
+                "Ảnh": join_images          # Gom toàn bộ chuỗi ảnh sạch về phân tách bởi dấu phẩy
             }).reset_index()
 
-            # SỬA TRIỆT ĐỂ LỖI 🔄0: Hàm lấy ảnh đại diện trả về đúng CHUỖI TEXT THUẦN (String) của ảnh đầu tiên
+            # SỬA TRIỆT ĐỂ LỖI 🔄0: Lấy chính xác CHUỖI TEXT THUẦN TÚY (String) của bức ảnh đầu tiên làm ảnh đại diện
             def get_avatar_image(x):
                 val = str(x).strip()
                 if not val or val.lower() in ["none", "nan", ""]:
                     return ""
-                parts = [p.strip() for p in val.split(",") if p.strip()]
-                # TRẢ VỀ STRING: Ép kiểu dữ liệu trả về là chuỗi văn bản đơn lẻ để st.column_config.ImageColumn không bị sập
-                return str(parts[0]) if parts else ""
+                parts = [p.strip() for p in val.split(",") if p.strip() and p.startswith("data:image")]
+                # ĐÃ SỬA: Lấy phần tử đầu tiên bằng index [0] dạng chuỗi text thuần túy chứ không gọi hàm ép kiểu str() bừa bãi
+                return parts[0] if parts else ""
                 
             df_table = df_display.copy()
             df_table["Ảnh"] = df_table["Ảnh"].apply(get_avatar_image)
@@ -598,7 +594,7 @@ else:
             show_columns = ["ID", "Công trình", "Tình trạng", "Tiến độ (%)", "Người phụ trách", "Cập nhật cuối", "Miêu tả", "Ảnh"]
             valid_columns = [col for col in show_columns if col in df_table.columns]
 
-            # Hiển thị bảng tổng hợp (Đã sửa lỗi hiển thị tràn icon lỗi ảnh bên rìa phải)
+            # Hiển thị bảng tổng hợp duy nhất 1 hàng sạch sẽ lên màn hình
             st.dataframe(
                 df_table[valid_columns],
                 width='stretch',
