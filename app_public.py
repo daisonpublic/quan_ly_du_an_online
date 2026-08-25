@@ -738,14 +738,14 @@ else:
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    # --- BƯỚC 2: HẠ KÍCH THƯỚC XUỐNG 400PX (CỰC NHẸ, ĐỦ NHÌN TRÊN WEB) ---
-                                    max_size = 400
+                                    # --- BƯỚC 2: HẠ KÍCH THƯỚC XUỐNG XOAY QUANH 350PX (SIÊU NHẸ) ---
+                                    max_size = 350
                                     if image.width > max_size or image.height > max_size:
                                         image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                                     
-                                    # --- BƯỚC 3: NÉN SÂU CHẤT LƯỢNG XUỐNG 30% ĐỂ CHUỖI SIÊU NGẮN ---
+                                    # --- BƯỚC 3: NÉN CHẤT LƯỢNG XUỐNG 25% ĐỂ CHUỖI CỰC NGẮN ---
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=30) 
+                                    image.save(buffered, format="JPEG", quality=25) 
                                     
                                     # --- BƯỚC 4: MÃ HÓA BASE64 ---
                                     encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
@@ -755,13 +755,14 @@ else:
                                     chieu_dai_anh_nay = len(data_url)
                                     chieu_dai_du_kien = tong_so_ky_tu_tich_luy + chieu_dai_anh_nay + (1 if current_images else 0)
                                     
-                                    # --- BƯỚC 5: KIỂM SOÁT AN TOÀN CHO GOOGLE SHEETS ---
-                                    if chieu_dai_du_kien < 45000:
+                                    # --- BƯỚC 5: THẮT CHẶT TRẦN AN TOÀN Ở MỨC 30,000 KÝ TỰ ---
+                                    # Ngưỡng 30k đảm bảo cách xa giới hạn lỗi 50k của Google Sheets, chặn đứng lỗi 400
+                                    if chieu_dai_du_kien < 30000:
                                         current_images.append(data_url)
                                         tong_so_ky_tu_tich_luy = chieu_dai_du_kien
                                     else:
-                                        st.warning(f"⚠️ Đã đạt giới hạn dung lượng ô lưu trữ. Ảnh '{u_file.name}' đã bị lược bỏ để bảo vệ an toàn dữ liệu!")
-                                        break # Ngắt vòng lặp, giữ lại các ảnh đã nạp thành công trước đó
+                                        st.warning(f"⚠️ Đã đạt giới hạn an toàn dữ liệu của ô tính. Ảnh '{u_file.name}' đã được lược bớt để tránh lỗi bộ nhớ Google Sheet!")
+                                        break # Ngắt vòng lặp, giữ lại các ảnh gọn nhẹ đã nạp thành công trước đó
                                             
                                 except Exception as e:
                                     st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
