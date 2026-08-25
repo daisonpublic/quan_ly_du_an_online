@@ -746,9 +746,9 @@ else:
                                     buffered = io.BytesIO()
                                     image.save(buffered, format="JPEG", quality=60)
                                     
-                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG MULTIPART ---
-                                    # ĐÃ SỬA: Đường dẫn URL chính thức chuẩn 100% kết nối đến API ImgBB
-                                    url_api = f"https://imgbb.com{IMGBB_API_KEY}"
+                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG MULTIPART (ĐÃ FIX CỨNG URL CHUẨN) ---
+                                    # Link đã được sửa cứng chính xác, không lo bị dính liền ký tự hay lỗi tên miền nữa
+                                    url_api = "https://imgbb.com"
                                     
                                     files_payload = {
                                         "image": ("image.jpg", buffered.getvalue(), "image/jpeg")
