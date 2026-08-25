@@ -777,9 +777,17 @@ else:
                                                 direct_url = res_json["data"]["url"]
                                                 current_images.append(direct_url)
                                             except Exception:
-                                                st.error(f"❌ ImgBB phản hồi định dạng lạ. Nội dung: {response.text[:150]}")
+                                                # Nếu lỗi định dạng lạ, tìm xem trong chuỗi HTML có thông báo lỗi ẩn không
+                                                raw_text = response.text
+                                                error_msg = "Không xác định"
+                                                if "error" in raw_text.lower():
+                                                    # Cố gắng cắt ra một đoạn ngắn xung quanh chữ lỗi để hiển thị
+                                                    idx = raw_text.lower().find("error")
+                                                    error_msg = raw_text[idx:idx+150]
+                                                st.error(f"❌ ImgBB trả về trang lỗi HTML. Lý do ẩn: {error_msg}")
                                         else:
-                                            st.error(f"❌ Server ImgBB từ chối (Mã {response.status_code}). Chi tiết: {response.text[:150]}")
+                                            # Trường hợp các mã lỗi 400, 403, 500
+                                            st.error(f"❌ Server ImgBB từ chối (Mã {response.status_code}). Vui lòng kiểm tra lại chính xác API Key!")
                                             
                                 except Exception as e:
                                     st.error(f"❌ Lỗi xử lý ảnh {u_file.name}: {e}")
