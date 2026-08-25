@@ -668,58 +668,60 @@ else:
             # --- BIỂU ĐỒ TIẾN ĐỘ THỰC TẾ (BẢN SỬA LỖI HIỂN THỊ THIẾU CỘT) ---
         st.markdown("---")
         st.subheader("Biểu đồ tiến độ thực tế (%)")
-        
+
         if not st.session_state["projects"].empty:
             try:
                 import plotly.express as px
+                import pandas as pd
                 
-                # 1. Tạo một bản sao dữ liệu để làm sạch, tránh ảnh hưởng đến bảng gốc
-                df_chart = st.session_state["projects"].copy()
+                # 1. Sử dụng dataframe df_display đã gom nhóm ở phía trên để vẽ biểu đồ
+                # Đảm bảo mỗi tên công trình chỉ xuất hiện duy nhất một dòng dữ liệu mới nhất
+                df_chart = df_display.copy()
                 
-                # 2. Làm sạch dữ liệu: Xóa khoảng trắng ở tên công trình, ép tiến độ về dạng số thực (float)
+                # 2. Làm sạch dữ liệu và ép kiểu tiến độ thành số thực (float/int)
                 df_chart["Công trình"] = df_chart["Công trình"].astype(str).str.strip()
-                
-                # Loại bỏ ký tự % nếu người dùng vô tình nhập vào sheet, chuyển chuỗi trống thành 0
                 df_chart["Tiến độ (%)"] = (
                     df_chart["Tiến độ (%)"]
                     .astype(str)
                     .str.replace("%", "")
                     .str.strip()
                 )
-                df_chart["Tiến độ (%)"] = pd.to_numeric(df_chart["Tiến độ (%)"], errors="coerce").fillna(0)
+                df_chart["Tiến độ (%)"] = pd.to_numeric(df_chart["Tiến độ (%)"], errors="coerce").fillna(0).astype(int)
                 
-                # 3. Vẽ biểu đồ cột bằng Plotly Express để đảm bảo hiển thị ĐẦY ĐỦ các công trình
+                # 3. Vẽ biểu đồ cột (Đảm bảo cấu hình barmode="group" để không bị tự động chồng khối)
                 fig = px.bar(
                     df_chart, 
                     x="Công trình", 
                     y="Tiến độ (%)",
-                    text="Tiến độ (%)",  # Hiển thị số % trực tiếp trên đầu cột cho dễ nhìn
+                    text="Tiến độ (%)",  # Hiển thị số % trực tiếp trên đầu cột
                     labels={"Tiến độ (%)": "Tiến độ thực tế (%)", "Công trình": "Tên công trình"},
-                    template="plotly_white"
+                    template="plotly_white",
+                    barmode="group"      # Ép các giá trị đứng độc lập, không cộng dồn, không chia đoạn
                 )
                 
-                # 4. Định dạng hiển thị cột màu xanh chuẩn và hiển thị số % rõ ràng
+                # 4. Định dạng hiển thị màu cột và vị trí số %
                 fig.update_traces(
                     marker_color="#1f77b4", 
                     texttemplate="%{text}%", 
-                    textposition="outside"
+                    textposition="outside"  # Đẩy chữ số % ra hẳn phía ngoài đỉnh cột
                 )
                 
-                # Ép trục X nhận diện từng công trình độc lập (không bị gộp hoặc bỏ sót công trình sau)
+                # Ép trục X nhận diện từng công trình độc lập và giới hạn trục Y từ 0 đến 105%
                 fig.update_layout(
                     xaxis_type="category", 
-                    yaxis_range=[0, 105], # Giới hạn trục Y từ 0 đến 105% để không bị tràn số
-                    margin=dict(l=20, r=20, t=20, b=20)
+                    yaxis_range=[0, 105],
+                    margin=dict(l=20, r=20, t=30, b=20)
                 )
                 
                 # 5. Hiển thị biểu đồ lên giao diện Streamlit
                 st.plotly_chart(fig, use_container_width=True)
                 
             except Exception as chart_err:
-                # Phương án dự phòng bằng st.bar_chart gốc nếu máy bạn chưa cài plotly
-                # nhưng đã được làm sạch dữ liệu để sửa lỗi hiển thị
+                # Phương án dự phòng bằng st.bar_chart nếu chưa xử lý gộp được biến df_display
                 df_backup = st.session_state["projects"].copy()
                 df_backup["Tiến độ (%)"] = pd.to_numeric(df_backup["Tiến độ (%)"], errors='coerce').fillna(0)
+                # Sử dụng hàm drop_duplicates để biểu đồ dự phòng không bị lặp công trình
+                df_backup = df_backup.drop_duplicates(subset=["Công trình"], keep="last")
                 st.bar_chart(
                     data=df_backup, 
                     x="Công trình", 
