@@ -724,15 +724,16 @@ else:
 
                     if uploaded_files:
                         with st.spinner("Đang tối ưu ảnh và đẩy lên hệ thống đám mây ImgBB..."):
-                            import urllib.request
-                            import urllib.parse
-                            import uuid
-                            from PIL import Image
+                            import base64
                             import io
-                            
+                            import json  # <-- THÊM DÒNG NÀY ĐỂ HẾT LỖI 'json is not defined'
+                            import urllib.parse
+                            import urllib.request
+                            from PIL import Image
+
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
-                            url_api = "https://api.imgbb.com/1/upload"      
-                            
+                            url_api = "https://imgbb.com"
+
                             for u_file in uploaded_files:
                                 try:
                                     # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ---
@@ -760,12 +761,12 @@ else:
 
                                     with urllib.request.urlopen(req) as response:
                                         res_data = json.loads(response.read().decode("utf-8"))
-                                    if res_data.get("success"):
-                                        img_url = res_data["data"]["url"]
-                                        st.success(f"Đẩy ảnh thành công: {img_url}")
-                                        st.image(img_url, width=300)
-                                    else:
-                                        st.error("Lỗi từ hệ thống ImgBB.")
+                                        if res_data.get("success"):
+                                            img_url = res_data["data"]["url"]
+                                            st.success(f"Đẩy ảnh thành công: {img_url}")
+                                            st.image(img_url, width=300)
+                                        else:
+                                            st.error("Lỗi từ hệ thống ImgBB.")
 
                                 except Exception as e:
                                     st.error(f"Đã xảy ra lỗi khi xử lý ảnh: {e}")
