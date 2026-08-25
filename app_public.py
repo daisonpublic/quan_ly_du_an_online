@@ -723,49 +723,74 @@ else:
                     response = None 
 
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu nén sâu và mã hóa Base64 hình ảnh..."):
-                            import base64
+                        with st.spinner("Đang tối ưu ảnh và đẩy lên hệ thống đám mây ImgBB..."):
+                            import urllib.request
+                            import urllib.parse
+                            import uuid
                             from PIL import Image
                             import io
                             
-                            # Biến theo dõi tổng số ký tự tích lũy của toàn bộ các ảnh gộp lại
-                            tong_so_ky_tu_tich_luy = 0
+                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
+                            url_api = f"https://imgbb.com{IMGBB_API_KEY}"
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ CHUYỂN ĐỔI HỆ MÀU ---
+                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ĐỂ ĐƯỜNG TRUYỀN NHẸ HƠN ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    # --- BƯỚC 2: HẠ KÍCH THƯỚC XUỐNG XOAY QUANH 350PX (SIÊU NHẸ) ---
-                                    max_size = 350
-                                    if image.width > max_size or image.height > max_size:
-                                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                                    # Giới hạn chiều rộng/cao tối đa 1024px để ảnh nét mà dung lượng nhẹ
+                                    if image.width > 1024 or image.height > 1024:
+                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
                                     
-                                    # --- BƯỚC 3: NÉN CHẤT LƯỢNG XUỐNG 25% ĐỂ CHUỖI CỰC NGẮN ---
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=25) 
+                                    image.save(buffered, format="JPEG", quality=65)
+                                    img_bytes = buffered.getvalue()
                                     
-                                    # --- BƯỚC 4: MÃ HÓA BASE64 ---
-                                    encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
+                                    # --- BƯỚC 2: TỰ DỰNG MULTIPART FORM-DATA THUẦN TÚY (BẢN VÁ VƯỢT CLOUDFLARE) ---
+                                    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
                                     
-                                    # Tính toán tổng chiều dài dự kiến của cả ô tính sau khi thêm ảnh này
-                                    chieu_dai_anh_nay = len(data_url)
-                                    chieu_dai_du_kien = tong_so_ky_tu_tich_luy + chieu_dai_anh_nay + (1 if current_images else 0)
+                                    # Tạo phần thân dữ liệu (body) theo đúng chuẩn trình duyệt Chrome gửi đi
+                                    body = []
+                                    body.append(f"--{boundary}".encode('utf-8'))
+                                    body.append(f'Content-Disposition: form-data; name="image"; filename="image.jpg"'.encode('utf-8'))
+                                    body.append(b'Content-Type: image/jpeg')
+                                    body.append(b'')
+                                    body.append(img_bytes)
+                                    body.append(f"--{boundary}--".encode('utf-8'))
+                                    body.append(b'')
                                     
-                                    # --- BƯỚC 5: THẮT CHẶT TRẦN AN TOÀN Ở MỨC 30,000 KÝ TỰ ---
-                                    # Ngưỡng 30k đảm bảo cách xa giới hạn lỗi 50k của Google Sheets, chặn đứng lỗi 400
-                                    if chieu_dai_du_kien < 30000:
-                                        current_images.append(data_url)
-                                        tong_so_ky_tu_tich_luy = chieu_dai_du_kien
-                                    else:
-                                        st.warning(f"⚠️ Đã đạt giới hạn an toàn dữ liệu của ô tính. Ảnh '{u_file.name}' đã được lược bớt để tránh lỗi bộ nhớ Google Sheet!")
-                                        break # Ngắt vòng lặp, giữ lại các ảnh gọn nhẹ đã nạp thành công trước đó
-                                            
+                                    data_payload = b'\r\n'.join(body)
+                                    
+                                    # Cấu hình Header giả lập trình duyệt thật cực kỳ nghiêm ngặt
+                                    headers = {
+                                        "Content-Type": f"multipart/form-data; boundary={boundary}",
+                                        "Content-Length": str(len(data_payload)),
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                        "Accept": "application/json, text/plain, */*"
+                                    }
+                                    
+                                    # --- BƯỚC 3: GỬI YÊU CẦU MẠNG BẰNG URLLIB (BỎ QUA THƯ VIỆN REQUESTS BỊ CHẶN) ---
+                                    req = urllib.request.Request(url_api, data=data_payload, headers=headers, method="POST")
+                                    
+                                    # Thực hiện kết nối và đọc kết quả trả về
+                                    with urllib.request.urlopen(req, timeout=30) as response:
+                                        res_body = response.read().decode('utf-8')
+                                        import json
+                                        res_json = json.loads(res_body)
+                                        
+                                        # Trích xuất đường dẫn URL ngắn (.jpg) lưu trữ vĩnh viễn
+                                        direct_url = res_json["data"]["url"]
+                                        current_images.append(direct_url)
+                                        
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
+                                    # Nếu ImgBB trả lỗi, cố gắng hiển thị nội dung lỗi thật để xử lý
+                                    if hasattr(e, 'read'):
+                                        error_data = e.read().decode('utf-8')
+                                        st.error(f"❌ ImgBB từ chối file '{u_file.name}': {error_data[:150]}")
+                                    else:
+                                        st.error(f"❌ Lỗi kết nối đẩy ảnh '{u_file.name}': {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
