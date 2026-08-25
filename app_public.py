@@ -713,35 +713,30 @@ else:
                     if not pd.isna(current_row["Ảnh"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
                         current_images = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
 
-                    # XỬ LÝ LƯU FILE ẢNH VÀO FOLDER "image" CỦA CHƯƠNG TRÌNH TRÊN MÁY TÍNH
+                    # XỬ LÝ LƯU FILE ẢNH LUÔN MÃ HÓA BASE64 ĐỂ ĐỒNG BỘ TUYỆT ĐỐI KHÔNG SỢ RESET SERVER
                     if uploaded_files:
-                        with st.spinner("Đang xử lý lưu trữ hình ảnh công trình..."):
+                        with st.spinner("Đang xử lý mã hóa hình ảnh công trình..."):
                             for u_file in uploaded_files:
                                 try:
-                                    # Kiểm tra xem chương trình đang chạy Online (Streamlit Cloud) hay Local
-                                    # Nếu có biến môi trường STREAMLIT_SERVER_PORT chứng tỏ đang chạy Online
-                                    is_online = os.environ.get("STREAMLIT_SERVER_PORT") is not None
+                                    import base64
+                                    # Đọc dữ liệu nhị phân từ file upload
+                                    file_bytes = u_file.getbuffer()
+                                    encoded_img = base64.b64encode(file_bytes).decode("utf-8")
                                     
-                                    if is_online:
-                                        # Hướng xử lý ONLINE: Mã hóa ảnh sang chuỗi Base64 để lưu thẳng lên Google Sheet
-                                        import base64
-                                        file_bytes = u_file.getbuffer()
-                                        encoded_img = base64.b64encode(file_bytes).decode("utf-8")
-                                        # Tạo chuỗi dữ liệu ảnh chuẩn hiển thị HTML/Streamlit
-                                        data_url = f"data:{u_file.type};base64,{encoded_img}"
-                                        current_images.append(data_url)
-                                    else:
-                                        # Hướng xử lý LOCAL: Lưu file vào thư mục image trên máy tính như cũ
+                                    # Tạo chuỗi URL Data hoàn chỉnh (Lưu trữ và hiển thị trực tiếp bằng Text trên Cloud)
+                                    data_url = f"data:{u_file.type};base64,{encoded_img}"
+                                    current_images.append(data_url)
+                                    
+                                    # (Tùy chọn) Nếu vẫn muốn lưu thêm 1 bản local dự phòng trên máy cá nhân khi chạy dưới máy:
+                                    try:
                                         timestamp = int(time.time() * 1000)
-                                        project_id = current_row['ID']
-                                        img_name = f"{project_id}_{timestamp}_{u_file.name}"
+                                        img_name = f"{current_row['ID']}_{timestamp}_{u_file.name}"
                                         full_save_path = os.path.join(IMAGE_DIR, img_name)
-                                    
                                         with open(full_save_path, "wb") as f:
-                                            f.write(u_file.getbuffer())
-                                            
-                                        relative_path = f"image/{img_name}"
-                                        current_images.append(relative_path)
+                                            f.write(file_bytes)
+                                    except Exception:
+                                        pass # Bỏ qua nếu môi trường cloud không cho phép ghi file local
+                                        
                                 except Exception as e:
                                     st.error(f"Lỗi lưu file ảnh {u_file.name}: {e}")
 
