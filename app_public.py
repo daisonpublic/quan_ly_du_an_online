@@ -536,9 +536,15 @@ else:
             if "Ảnh" not in df_display.columns:
                 df_display["Ảnh"] = ""
             else:
-                df_display["Ảnh"] = df_display["Ảnh"].apply(
-                    lambda x: "" if str(x).strip().lower() in ["nan", "none"] else str(x)
-                )
+                def get_first_image(x):
+                    chuoi_anh = str(x).strip()
+                    if chuoi_anh.lower() in ["nan", "none", ""]:
+                        return ""
+                    # Tách chuỗi bằng dấu phẩy và lấy phần tử đầu tiên
+                    danh_sach_anh = [p.strip() for p in chuoi_anh.split(",") if p.strip()]
+                    return danh_sach_anh[0] if danh_sach_anh else ""
+                df_display["Ảnh"] = df_display["Ảnh"].apply(get_first_image)
+                   
 
             show_columns = ["ID", "Công trình", "Tình trạng", "Tiến độ (%)", "Người phụ trách", "Cập nhật cuối", "Miêu tả", "Ảnh"]
             valid_columns = [col for col in show_columns if col in df_display.columns]
@@ -715,30 +721,39 @@ else:
 
                     # XỬ LÝ LƯU FILE ẢNH LUÔN MÃ HÓA BASE64 ĐỂ ĐỒNG BỘ TUYỆT ĐỐI KHÔNG SỢ RESET SERVER
                     if uploaded_files:
-                        with st.spinner("Đang xử lý mã hóa hình ảnh công trình..."):
+                        with st.spinner("Đang tải hình ảnh lên hệ thống đám mây ImgBB..."):
+                            import requests
+                            
+                            # ĐIỀN MÃ API KEY CỦA BẠN VÀO ĐÂY
+                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
+                            
                             for u_file in uploaded_files:
                                 try:
-                                    import base64
-                                    # Đọc dữ liệu nhị phân từ file upload
-                                    file_bytes = u_file.getbuffer()
-                                    encoded_img = base64.b64encode(file_bytes).decode("utf-8")
+                                    # 1. Chuẩn bị file nhị phân để gửi qua giao thức POST HTTP
+                                    file_bytes = u_file.getvalue()
+                                    payload = {
+                                        "key": IMGBB_API_KEY,
+                                        "expiration": 15552000 # (Tùy chọn) Tự động xóa sau 6 tháng để bảo mật, bỏ dòng này nếu muốn lưu vĩnh viễn
+                                    }
+                                    files = {
+                                        "image": (u_file.name, file_bytes)
+                                    }
                                     
-                                    # Tạo chuỗi URL Data hoàn chỉnh (Lưu trữ và hiển thị trực tiếp bằng Text trên Cloud)
-                                    data_url = f"data:{u_file.type};base64,{encoded_img}"
-                                    current_images.append(data_url)
+                                    # 2. Gọi API của ImgBB để upload ảnh lên mạng
+                                    response = requests.post("https://imgbb.com", data=payload, files=files, timeout=30)
                                     
-                                    # (Tùy chọn) Nếu vẫn muốn lưu thêm 1 bản local dự phòng trên máy cá nhân khi chạy dưới máy:
-                                    try:
-                                        timestamp = int(time.time() * 1000)
-                                        img_name = f"{current_row['ID']}_{timestamp}_{u_file.name}"
-                                        full_save_path = os.path.join(IMAGE_DIR, img_name)
-                                        with open(full_save_path, "wb") as f:
-                                            f.write(file_bytes)
-                                    except Exception:
-                                        pass # Bỏ qua nếu môi trường cloud không cho phép ghi file local
+                                    if response.status_code == 200:
+                                        res_json = response.json()
+                                        # Lấy link ảnh trực tiếp (Direct URL kết thúc bằng đuôi .jpg/.png)
+                                        direct_url = res_json["data"]["url"]
+                                        
+                                        # Thêm đường link ảnh ngắn này vào mảng danh sách
+                                        current_images.append(direct_url)
+                                    else:
+                                        st.error(f"❌ ImgBB từ chối ảnh {u_file.name}: {response.text}")
                                         
                                 except Exception as e:
-                                    st.error(f"Lỗi lưu file ảnh {u_file.name}: {e}")
+                                    st.error(f"❌ Lỗi kết nối đường truyền tới server ImgBB: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
