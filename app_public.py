@@ -588,36 +588,44 @@ else:
             )
             
             # --- KHU VỰC XEM CHI TIẾT BÁO CÁO CÔNG TRƯỜNG (HIỂN THỊ ĐẦY ĐỦ TẤT CẢ ẢNH ĐÃ GÔM) ---
+            # --- KHU VỰC XEM CHI TIẾT BÁO CÁO CÔNG TRƯỜNG ---
             st.markdown("### 🔍 Chi tiết báo cáo công trường")
         
             for idx, row in df_display.iterrows():
                 with st.expander(f"🚧 [{row['ID']}] {row['Công trình']} (Tiến độ: {row['Tiến độ (%)']}%)"):
-                    col_left, col_right = st.columns([2, 1])
+                    col_left, col_right = st.columns([3, 2]) # Tăng tỷ lệ cột chữ rộng hơn để hiển thị nhật ký thoáng đãng
                 
                     with col_left:
-                        st.markdown(f"**Trạng thái mới nhất:** {row['Tình trạng']}")
+                        st.markdown(f"**Trạng thái mới nhất:** `{row['Tình trạng']}`")
                         st.markdown(f"**Người phụ trách mới nhất:** {row['Người phụ trách']}")
                         st.markdown(f"**Cập nhật cuối:** {row['Cập nhật cuối']}")
-                        st.markdown("**Tổng hợp nội dung nhật ký công trường:**")
+                        st.markdown("**📋 Nhật ký tiến độ theo từng ngày:**")
                     
                         txt_mieu_ta = str(row["Miêu tả"]).strip()
                         if txt_mieu_ta:
-                            # Tách các đoạn miêu tả cũ bằng dấu gạch đứng để người dùng dễ đọc dòng thời gian
-                            for part_desc in txt_mieu_ta.split(" | "):
-                                if part_desc.strip():
-                                    st.info(part_desc.strip())
+                            # Tách các ngày báo cáo cũ dựa trên ký tự phân tách " | "
+                            parts_desc = [p.strip() for p in txt_mieu_ta.split(" | ") if p.strip()]
+                            
+                            for part_desc in parts_desc:
+                                # Tạo một hộp màu xám/xanh bo góc chuyên nghiệp độc lập cho từng ngày báo cáo
+                                with st.container(border=True):
+                                    # Kiểm tra xem trong chuỗi có định dạng ngày (ví dụ "1. Ngày" hoặc chứa dấu hai chấm) hay không
+                                    if ":" in part_desc:
+                                        # Tách tiêu đề ngày và nội dung chi tiết để làm nổi bật dòng thời gian
+                                        tieu_de, noi_dung = part_desc.split(":", 1)
+                                        st.markdown(f"**📅 {tieu_de.strip()}:**")
+                                        st.markdown(noi_dung.strip())
+                                    else:
+                                        st.markdown(part_desc)
                         else:
                             st.caption("*(Chưa có nội dung miêu tả chi tiết)*")
                     
                     with col_right:
                         raw_anh = str(row["Ảnh"]).strip()
                         if raw_anh:
-                            # Bóc tách chuỗi ảnh tổng hợp đã được gộp từ nhiều dòng trên Google Sheet
                             img_list = [img.strip() for img in raw_anh.split(",") if img.strip()]
-                            
                             if img_list:
                                 st.markdown(f"**📸 Bộ sưu tập ảnh thực tế ({len(img_list)} ảnh):**")
-                                # Tạo lưới hiển thị 2 ảnh một dòng cho gọn gàng bên trong expander
                                 sub_cols = st.columns(2)
                                 for i, single_img in enumerate(img_list):
                                     with sub_cols[i % 2]:
