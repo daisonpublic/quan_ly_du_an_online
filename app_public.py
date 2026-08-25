@@ -714,70 +714,107 @@ else:
                 submitted = st.form_submit_button("Cập nhật báo cáo")
                 
                 if submitted:
-                    current_images = []
-                    # SỬA LỖI: Đổi "Toggle" thành "Ảnh" để khớp chính xác dữ liệu Pandas
-                    if not pd.isna(current_row["Ảnh"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
-                        current_images = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
+                    current_images = [] # Sửa lỗi định nghĩa biến hệ thống
+                    today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
+                    so_luong_thanh_cong = 0
+                    
+                    try:
+                        import gspread
+                        import json
+                        if "gspread_json" in st.secrets:
+                            raw_json_str = st.secrets["gspread_json"]
+                            creds_dict = json.loads(raw_json_str, strict=False)
+                            if "private_key" in creds_dict:
+                                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+                            gc = gspread.service_account_from_dict(creds_dict)
+                        else:
+                            current_dir = os.path.dirname(os.path.abspath(__file__))
+                            credentials_path = os.path.join(current_dir, 'credentials.json')
+                            gc = gspread.service_account(filename=credentials_path)
+                            
+                        sh = gc.open_by_key(SPREADSHEET_ID)
+                        worksheet = sh.worksheet("datacongtrinh")
+                    except Exception as sheet_conn_err:
+                        st.error(f"❌ Thất bại khi kết nối Google Sheets: {sheet_conn_err}")
+                        st.stop()
 
+                    # ============================================================================
+                    # TRƯỜNG HỢP 1: NGƯỜI DÙNG CÓ UP ẢNH -> TÁCH MỖI ẢNH THÀNH 1 DÒNG BÁO CÁO MỚI
+                    # ============================================================================
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu dung lượng và đồng bộ hình ảnh lên ImgBB..."):
-                            import requests
+                        with st.spinner("Đang xử lý nén sâu và bóc tách dòng báo cáo kèm ảnh..."):
                             import base64
                             from PIL import Image
                             import io
-                            import urllib3
-                            
-                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                            
-                            # VIẾT THẲNG URL CHUẨN XÁC VÀO ĐÂY ĐỂ TRÁNH LỖI PHÂN GIẢI TÊN MIỀN
-                            url_api = "https://imgbb.com"
 
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ---
+                                    # --- BƯỚC 1: ĐỌC VÀ NÉN SÂU ẢNH ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
 
-                                    if image.width > 1024 or image.height > 1024:
-                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                                    # Ép kích thước về 400px giúp ảnh siêu nhẹ nhưng hiển thị trên web vẫn rất rõ
+                                    max_size = 400
+                                    if image.width > max_size or image.height > max_size:
+                                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=65)
-                                    img_bytes = buffered.getvalue()
-
-                                    # --- BƯỚC 2: ĐÓNG GÓI MULTIPART FORM-DATA THUẦN TÚY ---
-                                    files_payload = {
-                                        "image": ("image.jpg", img_bytes, "image/jpeg")
-                                    }
+                                    image.save(buffered, format="JPEG", quality=25) # Chất lượng nén 25% giúp tối ưu ký tự
                                     
-                                    headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                                    }
+                                    # Mã hóa Base64 đơn lẻ cho bức ảnh này
+                                    encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
 
-                                    # --- BƯỚC 3: GỬI LÊN CLOUD VÀ TRÍCH XUẤT LINK ---
-                                    response = requests.post(
-                                        url_api, 
-                                        files=files_payload, 
-                                        headers=headers, 
-                                        timeout=30,
-                                        verify=False
-                                    )
-                                    
-                                    if response.status_code == 200:
-                                        res_json = response.json()
-                                        img_url = res_json["data"]["url"]
-                                        current_images.append(img_url)
-                                        st.caption(f"✅ Tải lên thành công ảnh: {u_file.name}")
-                                    else:
-                                        try:
-                                            err_detail = response.json()["error"]["message"]
-                                        except:
-                                            err_detail = response.text[:100]
-                                        st.error(f"❌ ImgBB từ chối file '{u_file.name}': {err_detail}")
+                                    # --- BƯỚC 2: ĐÓNG GÓI MẢNG DỮ LIỆU ĐẦY ĐỦ 9 CỘT THEO KHUNG CŨ ---
+                                    new_row_values = [
+                                        str(current_row["Công ty"]), 
+                                        str(current_row["ID"]),
+                                        str(selected_task), 
+                                        str(status), 
+                                        int(progress),
+                                        str(staff).strip(), 
+                                        str(today_str), 
+                                        str(data_url),  # Ô này CHỈ chứa duy nhất chuỗi của 1 bức ảnh này -> Cực kỳ an toàn!
+                                        str(description).strip()
+                                    ]
+
+                                    # --- BƯỚC 3: ĐẨY DÒNG BÁO CÁO NÀY LÊN GOOGLE SHEET ---
+                                    worksheet.append_row(new_row_values)
+                                    so_luong_thanh_cong += 1
 
                                 except Exception as e:
-                                    st.error(f"❌ Đã xảy ra lỗi khi xử lý ảnh '{u_file.name}': {e}")
+                                    st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
+                                    
+                            if so_luong_thanh_cong > 0:
+                                st.success(f"🎉 Đã đồng bộ thành công {so_luong_thanh_cong} hình ảnh (chia tách thành các dòng nhật ký độc lập) lên Google Sheets!")
+                                load_data_from_sheets()
+                                st.rerun()
+
+                    # ============================================================================
+                    # TRƯỜNG HỢP 2: KHÔNG UP ẢNH -> GHI ĐÈ BÁO CÁO CHỮ LÊN DÒNG CŨ NHƯ TRƯỚC ĐÂY
+                    # ============================================================================
+                    else:
+                        with st.spinner("Đang cập nhật báo cáo tiến độ..."):
+                            try:
+                                sheet_row_idx = int(raw_task_idx) + 2 
+                                updated_row_values = [
+                                    str(current_row["Công ty"]), 
+                                    str(current_row["ID"]),
+                                    str(selected_task), 
+                                    str(status), 
+                                    int(progress),
+                                    str(staff).strip(), 
+                                    str(today_str), 
+                                    str(current_row["Ảnh"]), # Giữ nguyên chuỗi ảnh cũ trong sheet
+                                    str(description).strip()
+                                ]
+                                worksheet.update(f"A{sheet_row_idx}:I{sheet_row_idx}", [updated_row_values])
+                                st.success("🎉 Cập nhật báo cáo tiến độ thành công!")
+                                load_data_from_sheets()
+                                st.rerun()
+                            except Exception as sheet_err:
+                                st.error(f"❌ Lỗi đồng bộ dữ liệu báo cáo chữ: {sheet_err}")
 
                     # Gom tất cả các link ảnh thành chuỗi văn bản cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
