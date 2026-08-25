@@ -715,24 +715,24 @@ else:
                 
                 if submitted:
                     current_images = []
-                    # Giữ lại danh sách ảnh local đã chụp từ trước
-                    if not pd.isna(current_row["Ảnh"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
+                    # Giữ lại danh sách ảnh từ trước
+                    if not pd.isna(current_row["Toggle"]) and str(current_row["Ảnh"]).strip() and str(current_row["Ảnh"]).strip() != "None":
                         current_images = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
 
-                    # XỬ LÝ LƯU FILE ẢNH LUÔN MÃ HÓA BASE64 ĐỂ ĐỒNG BỘ TUYỆT ĐỐI KHÔNG SỢ RESET SERVER
-                    response = None 
-
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu ảnh và đẩy lên hệ thống đám mây ImgBB..."):
+                        with st.spinner("Đang tối ưu dung lượng và đồng bộ hình ảnh lên ImgBB..."):
+                            import requests
                             import base64
-                            import io
-                            import json  # <-- THÊM DÒNG NÀY ĐỂ HẾT LỖI 'json is not defined'
-                            import urllib.parse
-                            import urllib.request
                             from PIL import Image
-
+                            import io
+                            import urllib3
+                            
+                            # Tắt cảnh báo SSL trên môi trường mạng đám mây
+                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                            
                             IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68"
-                            url_api = "https://imgbb.com"
+                            # SỬA LỖI: Đường dẫn API nhận dữ liệu chuẩn của ImgBB
+                            url_api = f"https://imgbb.com{IMGBB_API_KEY}"
 
                             for u_file in uploaded_files:
                                 try:
@@ -748,41 +748,50 @@ else:
                                     image.save(buffered, format="JPEG", quality=65)
                                     img_bytes = buffered.getvalue()
 
-                                    # --- BƯỚC 2: MÃ HÓA BASE64 VÀ GỬI LÊN IMGBB ---
-                                    base64_image = base64.b64encode(img_bytes).decode("utf-8")
-
-                                    payload = {
-                                        "key": IMGBB_API_KEY,
-                                        "image": base64_image,
+                                    # --- BƯỚC 2: ĐÓNG GÓI MULTIPART FORM-DATA THUẦN TÚY ---
+                                    files_payload = {
+                                        "image": ("image.jpg", img_bytes, "image/jpeg")
+                                    }
+                                    
+                                    headers = {
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                                     }
 
-                                    data = urllib.parse.urlencode(payload).encode("utf-8")
-                                    req = urllib.request.Request(url_api, data=data, method="POST")
-
-                                    with urllib.request.urlopen(req) as response:
-                                        res_data = json.loads(response.read().decode("utf-8"))
-                                        if res_data.get("success"):
-                                            img_url = res_data["data"]["url"]
-                                            st.success(f"Đẩy ảnh thành công: {img_url}")
-                                            st.image(img_url, width=300)
-                                        else:
-                                            st.error("Lỗi từ hệ thống ImgBB.")
+                                    # --- BƯỚC 3: GỬI LÊN CLOUD VÀ TRÍCH XUẤT LINK ---
+                                    response = requests.post(
+                                        url_api, 
+                                        files=files_payload, 
+                                        headers=headers, 
+                                        timeout=30,
+                                        verify=False
+                                    )
+                                    
+                                    if response.status_code == 200:
+                                        res_json = response.json()
+                                        img_url = res_json["data"]["url"]
+                                        current_images.append(img_url)
+                                        st.caption(f"✅ Tải lên thành công ảnh: {u_file.name}")
+                                    else:
+                                        try:
+                                            err_detail = response.json()["error"]["message"]
+                                        except:
+                                            err_detail = response.text[:100]
+                                        st.error(f"❌ ImgBB từ chối file '{u_file.name}': {err_detail}")
 
                                 except Exception as e:
-                                    st.error(f"Đã xảy ra lỗi khi xử lý ảnh: {e}")
+                                    st.error(f"❌ Đã xảy ra lỗi khi xử lý ảnh '{u_file.name}': {e}")
 
-                    # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
+                    # Gom tất cả các link ảnh thành chuỗi văn bản cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
                     today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
                     
                     # ============================================================================
-                    # ĐỒNG BỘ DỮ LIỆU LÊN GOOGLE SHEET (ĐÃ SỬA ĐỒNG BỘ GSPREAD_JSON)
+                    # ĐỒNG BỘ DỮ LIỆU LÊN GOOGLE SHEET
                     # ============================================================================
                     try:
                         import gspread
                         import json
                         
-                        # Đọc cấu hình bảo mật trực tiếp từ hệ thống Streamlit Secrets an toàn
                         try:
                             if "gspread_json" in st.secrets:
                                 raw_json_str = st.secrets["gspread_json"]
@@ -795,20 +804,16 @@ else:
                                 credentials_path = os.path.join(current_dir, 'credentials.json')
                                 gc = gspread.service_account(filename=credentials_path)
                         except Exception as secret_err:
-                            # Phương án dự phòng cũ nếu không quét được môi trường mạng
                             gc = gspread.service_account(filename=os.path.join(MAIN_DIR, 'credentials.json'))
                             
                         sh = gc.open_by_key(SPREADSHEET_ID)
-                        
-                        # Luôn gọi tab chung duy nhất theo đúng cấu trúc Cách 2
                         worksheet = sh.worksheet("datacongtrinh")
                         
-                        # Định vị dòng chính xác tuyệt đối trên Sheet tổng (+2)
+                        # Định vị dòng chính xác trên Sheet tổng (+2)
                         sheet_row_idx = int(raw_task_idx) + 2 
                         
-                        # Mảng 9 cột hoàn thiện
                         updated_row_values = [
-                            str(current_row["Công ty"]), # Giữ nguyên mã Công ty cũ
+                            str(current_row["Công ty"]), 
                             str(current_row["ID"]),
                             str(selected_task), 
                             str(status), 
@@ -819,7 +824,6 @@ else:
                             str(description).strip()
                         ]
                         
-                        # Cập nhật vùng dữ liệu từ cột A đến cột I tương ứng 9 trường thông tin
                         worksheet.update(f"A{sheet_row_idx}:I{sheet_row_idx}", [updated_row_values])
                         st.success("🎉 Cập nhật báo cáo tiến độ và hình ảnh lên Google Sheets thành công!")
                         load_data_from_sheets()
