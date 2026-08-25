@@ -544,13 +544,13 @@ else:
                 valid_imgs = []
                 for img_str in series:
                     img_clean = str(img_str).strip()
-                    # Bộ lọc nghiêm ngặt: Chỉ lấy những ô thực sự bắt đầu bằng mã hóa ảnh Base64 chuẩn
-                    if img_clean and img_clean.startswith("data:image"):
-                        # Tách chuỗi nhỏ nếu trong ô chứa nhiều ảnh ngăn cách bởi dấu phẩy
-                        sub_parts = [p.strip() for p in img_clean.split(",") if p.strip()]
-                        for p in sub_parts:
-                            if p.startswith("data:image") and p not in valid_imgs:
-                                valid_imgs.append(p)
+                    # Loại bỏ các giá trị rác hoặc rỗng trước khi gộp
+                    if img_clean and img_clean.lower() not in ["none", "nan", "", "null"] and len(img_clean) > 100:
+                        # Nếu chuỗi cũ lỡ có tiền tố thì lọc bỏ, chỉ lấy phần base64 thô
+                        if "base64," in img_clean:
+                            img_clean = img_clean.split("base64,")[-1]
+                        if img_clean not in valid_imgs:
+                            valid_imgs.append(img_clean)
                 return ",".join(valid_imgs) if valid_imgs else ""
 
             # Hàm gộp miêu tả: Giữ nguyên khối văn bản sạch, không trùng lặp
@@ -580,15 +580,15 @@ else:
             }).reset_index()
 
             # SỬA TRIỆT ĐỂ LỖI 🔄0: Lấy chính xác CHUỖI TEXT THUẦN TÚY (String) của bức ảnh đầu tiên làm ảnh đại diện
+            df_table = df_display.copy()
             def get_avatar_image(x):
                 val = str(x).strip()
                 if not val or val.lower() in ["none", "nan", ""]:
                     return ""
-                parts = [p.strip() for p in val.split(",") if p.strip() and p.startswith("data:image")]
-                # ĐÃ SỬA: Lấy phần tử đầu tiên bằng index [0] dạng chuỗi text thuần túy chứ không gọi hàm ép kiểu str() bừa bãi
-                return parts[0] if parts else ""
-                
-            df_table = df_display.copy()
+                parts = [p.strip() for p in val.split(",") if p.strip()]
+                # Thêm tiền tố chuẩn cho ImageColumn của st.dataframe
+                return f"data:image/jpeg;base64,{parts[0]}" if parts else ""
+
             df_table["Ảnh"] = df_table["Ảnh"].apply(get_avatar_image)
 
             show_columns = ["ID", "Công trình", "Tình trạng", "Tiến độ (%)", "Người phụ trách", "Cập nhật cuối", "Miêu tả", "Ảnh"]
@@ -640,17 +640,28 @@ else:
                     
                     with col_right:
                         raw_anh = str(row["Ảnh"]).strip()
-                        if raw_anh:
-                            img_list = [img.strip() for img in raw_anh.split(",") if img.strip()]
+                        
+                        if raw_anh and raw_anh.lower() not in ["none", "nan", ""]:
+                            # Tách các chuỗi base64 đơn lẻ ra từ dấu phẩy
+                            img_list = [img.strip() for img in raw_anh.split(",") if img.strip() and len(img.strip()) > 100]
+                            
                             if img_list:
                                 st.markdown(f"**📸 Bộ sưu tập ảnh thực tế ({len(img_list)} ảnh):**")
                                 sub_cols = st.columns(2)
                                 for i, single_img in enumerate(img_list):
                                     with sub_cols[i % 2]:
-                                        if single_img.startswith("data:image"):
-                                            st.image(single_img, use_container_width=True)
+                                        try:
+                                            # Nếu chuỗi chưa có tiền tố html data, tự động thêm vào để st.image đọc được
+                                            if not single_img.startswith("data:image"):
+                                                full_base64_str = f"data:image/jpeg;base64,{single_img}"
+                                            else:
+                                                full_base64_str = single_img
+                                                
+                                            st.image(full_base64_str, use_container_width=True)
+                                        except Exception:
+                                            st.caption("⚠️ File ảnh lỗi không thể hiển thị")
                             else:
-                                st.caption("*(Chưa có ảnh thực tế)*")
+                                st.caption("*(Chưa có ảnh thực tế hợp lệ)*")
                         else:
                             st.caption("*(Chưa có ảnh thực tế)*")
 
@@ -804,24 +815,23 @@ else:
 
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ NÉN SÂU ẢNH ---
+                                    # --- ĐỌC VÀ NÉN SÂU ẢNH ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
 
-                                    # Ép kích thước về 400px giúp ảnh siêu nhẹ nhưng hiển thị trên web vẫn rất rõ
+                                    # Ép kích thước về 400px giúp ảnh siêu nhẹ, không vượt giới hạn ký tự Google Sheet
                                     max_size = 400
                                     if image.width > max_size or image.height > max_size:
                                         image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=25) # Chất lượng nén 25% giúp tối ưu ký tự
+                                    image.save(buffered, format="JPEG", quality=30) # Chất lượng nén 30% lý tưởng
                                     
-                                    # Mã hóa Base64 đơn lẻ cho bức ảnh này
+                                    # CHỈ LẤY CHUỖI THÔ (Không chèn text "data:image" ở đây để tránh trùng lặp)
                                     encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
 
-                                    # --- BƯỚC 2: ĐÓNG GÓI MẢNG DỮ LIỆU ĐẦY ĐỦ 9 CỘT THEO KHUNG CŨ ---
+                                    # --- ĐÓNG GÓI MẢNG DỮ LIỆU ĐẦY ĐỦ 9 CỘT ---
                                     new_row_values = [
                                         str(current_row["Công ty"]), 
                                         str(current_row["ID"]),
@@ -830,11 +840,11 @@ else:
                                         int(progress),
                                         str(staff).strip(), 
                                         str(today_str), 
-                                        str(data_url),  # Ô này CHỈ chứa duy nhất chuỗi của 1 bức ảnh này -> Cực kỳ an toàn!
+                                        str(encoded_img),  # Lưu chuỗi Base64 thô sạch sẽ vào cột H
                                         str(description).strip()
                                     ]
 
-                                    # --- BƯỚC 3: ĐẨY DÒNG BÁO CÁO NÀY LÊN GOOGLE SHEET ---
+                                    # --- ĐẨY LÊN GOOGLE SHEET ---
                                     worksheet.append_row(new_row_values)
                                     so_luong_thanh_cong += 1
 
