@@ -723,74 +723,48 @@ else:
                     response = None 
 
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu dung lượng và đồng bộ hình ảnh lên kho lưu trữ ImgBB..."):
-                            import requests
+                        with st.spinner("Đang tối ưu nén sâu và mã hóa Base64 hình ảnh..."):
                             import base64
                             from PIL import Image
                             import io
-                            import urllib3
                             
-                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
+                            # Biến theo dõi tổng số ký tự tích lũy của toàn bộ các ảnh gộp lại
+                            tong_so_ky_tu_tich_luy = 0
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: ĐỌC VÀ NÉN ẢNH ĐỂ ĐƯỜNG TRUYỀN SIÊU TỐC ---
+                                    # --- BƯỚC 1: ĐỌC VÀ CHUYỂN ĐỔI HỆ MÀU ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    if image.width > 1024 or image.height > 1024:
-                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                                    # --- BƯỚC 2: HẠ KÍCH THƯỚC XUỐNG 400PX (CỰC NHẸ, ĐỦ NHÌN TRÊN WEB) ---
+                                    max_size = 400
+                                    if image.width > max_size or image.height > max_size:
+                                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                                     
+                                    # --- BƯỚC 3: NÉN SÂU CHẤT LƯỢNG XUỐNG 30% ĐỂ CHUỖI SIÊU NGẮN ---
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=65)
-                                    base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                    image.save(buffered, format="JPEG", quality=30) 
                                     
-                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG VĂN BẢN XÁC THỰC CAO ---
-                                    # Đã viết cứng URL chính xác 100%, không sử dụng gộp chuỗi lỗi nữa
-                                    url_api = "https://imgbb.com"
+                                    # --- BƯỚC 4: MÃ HÓA BASE64 ---
+                                    encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
                                     
-                                    payload = {
-                                        "image": base64_data
-                                    }
+                                    # Tính toán tổng chiều dài dự kiến của cả ô tính sau khi thêm ảnh này
+                                    chieu_dai_anh_nay = len(data_url)
+                                    chieu_dai_du_kien = tong_so_ky_tu_tich_luy + chieu_dai_anh_nay + (1 if current_images else 0)
                                     
-                                    headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                                        "Accept": "application/json"
-                                    }
-                                    
-                                    try:
-                                        response = requests.post(
-                                            url_api, 
-                                            data=payload, 
-                                            headers=headers, 
-                                            timeout=30,
-                                            verify=False
-                                        )
-                                    except requests.exceptions.RequestException as net_err:
-                                        st.error(f"❌ Không thể kết nối tới server ImgBB: {net_err}")
-                                        continue
-                                    
-                                    # --- BƯỚC 3: PHÂN TÍCH KẾT QUẢ VÀ TRÍCH XUẤT ĐƯỜNG LINK ---
-                                    if response is not None:
-                                        if response.status_code == 200:
-                                            try:
-                                                res_json = response.json()
-                                                direct_url = res_json["data"]["url"]
-                                                current_images.append(direct_url)
-                                            except Exception:
-                                                st.error(f"❌ ImgBB phản hồi định dạng không mong muốn: {response.text[:100]}")
-                                        else:
-                                            try:
-                                                error_json = response.json()
-                                                detail_err = error_json["error"]["message"]
-                                            except Exception:
-                                                detail_err = response.text[:100]
-                                            st.error(f"❌ ImgBB từ chối xử lý (Mã lỗi {response.status_code}): {detail_err}")
+                                    # --- BƯỚC 5: KIỂM SOÁT AN TOÀN CHO GOOGLE SHEETS ---
+                                    if chieu_dai_du_kien < 45000:
+                                        current_images.append(data_url)
+                                        tong_so_ky_tu_tich_luy = chieu_dai_du_kien
+                                    else:
+                                        st.warning(f"⚠️ Đã đạt giới hạn dung lượng ô lưu trữ. Ảnh '{u_file.name}' đã bị lược bỏ để bảo vệ an toàn dữ liệu!")
+                                        break # Ngắt vòng lặp, giữ lại các ảnh đã nạp thành công trước đó
                                             
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi hệ thống trong quá trình nén file {u_file.name}: {e}")
+                                    st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
