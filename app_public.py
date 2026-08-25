@@ -723,15 +723,13 @@ else:
                     response = None 
 
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu dung lượng và đẩy hình ảnh lên Cloud..."):
+                        with st.spinner("Đang tối ưu dung lượng và đẩy hình ảnh lên Cloud Postimages..."):
                             import requests
-                            import base64
                             from PIL import Image
                             import io
                             import urllib3
                             
                             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
                             
                             for u_file in uploaded_files:
                                 try:
@@ -746,28 +744,37 @@ else:
                                     buffered = io.BytesIO()
                                     image.save(buffered, format="JPEG", quality=60)
                                     
-                                    # --- BƯỚC 2: CẤU HÌNH GỬI API DẠNG MULTIPART (ĐÃ FIX CỨNG URL CHUẨN) ---
-                                    # Link đã được sửa cứng chính xác, không lo bị dính liền ký tự hay lỗi tên miền nữa
-                                    url_api = "https://imgbb.com"
+                                    # --- BƯỚC 2: CẤU HÌNH GỬI API LÊN POSTIMAGES (KHÔNG LO KHÓA KEY) ---
+                                    url_api = "https://postimages.org"
                                     
                                     files_payload = {
-                                        "image": ("image.jpg", buffered.getvalue(), "image/jpeg")
+                                        "file": ("image.jpg", buffered.getvalue(), "image/jpeg")
+                                    }
+                                    
+                                    # Tham số cấu hình chuẩn cho Form Postimages
+                                    data_payload = {
+                                        "gallery": "",
+                                        "optsize": "0", # Giữ nguyên kích thước gốc sau khi nén
+                                        "expire": "0",  # Lưu trữ vĩnh viễn, không bao giờ tự xóa
+                                        "numfiles": "1"
                                     }
                                     
                                     headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                                        "X-Requested-With": "XMLHttpRequest"
                                     }
                                     
                                     try:
                                         response = requests.post(
                                             url_api, 
                                             files=files_payload, 
+                                            data=data_payload,
                                             headers=headers, 
                                             timeout=30,
                                             verify=False
                                         )
                                     except requests.exceptions.RequestException as net_err:
-                                        st.error(f"❌ Không thể kết nối tới server ImgBB: {net_err}")
+                                        st.error(f"❌ Không thể kết nối tới server Postimages: {net_err}")
                                         continue
                                     
                                     # --- BƯỚC 3: XỬ LÝ KẾT QUẢ TRẢ VỀ ---
@@ -775,17 +782,13 @@ else:
                                         if response.status_code == 200:
                                             try:
                                                 res_json = response.json()
-                                                direct_url = res_json["data"]["url"]
+                                                # Trích xuất đường link ảnh trực tiếp (Direct Link) từ Postimages
+                                                direct_url = res_json["url"]
                                                 current_images.append(direct_url)
                                             except Exception:
-                                                st.error(f"❌ ImgBB trả về định dạng lạ: {response.text[:100]}")
+                                                st.error(f"❌ Postimages phản hồi sai định dạng: {response.text[:100]}")
                                         else:
-                                            try:
-                                                error_json = response.json()
-                                                detail_err = error_json["error"]["message"]
-                                            except Exception:
-                                                detail_err = response.text[:100]
-                                            st.error(f"❌ ImgBB từ chối (Mã {response.status_code}): {detail_err}")
+                                            st.error(f"❌ Server Postimages từ chối xử lý (Mã lỗi: {response.status_code})")
                                             
                                 except Exception as e:
                                     st.error(f"❌ Lỗi xử lý đọc file ảnh {u_file.name}: {e}")
