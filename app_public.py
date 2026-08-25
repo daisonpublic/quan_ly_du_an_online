@@ -723,75 +723,39 @@ else:
                     response = None 
 
                     if uploaded_files:
-                        with st.spinner("Đang tối ưu dung lượng và đẩy hình ảnh lên Cloud Postimages..."):
-                            import requests
+                        with st.spinner("Đang tối ưu nén sâu và mã hóa Base64 hình ảnh..."):
+                            import base64
                             from PIL import Image
                             import io
-                            import urllib3
-                            
-                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # --- BƯỚC 1: NÉN ẢNH VÀ CHUYỂN ĐỔI ---
+                                    # --- BƯỚC 1: ĐỌC VÀ CHUYỂN ĐỔI HỆ MÀU ---
                                     image = Image.open(u_file)
                                     if image.mode in ("RGBA", "P"):
                                         image = image.convert("RGB")
                                     
-                                    if image.width > 1024 or image.height > 1024:
-                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                                    # --- BƯỚC 2: HẠ ĐỘ PHÂN GIẢI XUỐNG 640PX (RẤT NHẸ) ---
+                                    max_size = 640
+                                    if image.width > max_size or image.height > max_size:
+                                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                                     
+                                    # --- BƯỚC 3: NÉN SÂU CHẤT LƯỢNG XUỐNG 35% ---
                                     buffered = io.BytesIO()
-                                    image.save(buffered, format="JPEG", quality=60)
+                                    image.save(buffered, format="JPEG", quality=35) # Chất lượng 35% giúp ảnh siêu nhẹ nhưng vẫn nhìn rõ công trường
                                     
-                                    # --- BƯỚC 2: CẤU HÌNH GỬI API LÊN POSTIMAGES (KHÔNG LO KHÓA KEY) ---
-                                    url_api = "https://postimages.org"
+                                    # --- BƯỚC 4: MÃ HÓA BASE64 VÀ KIỂM TRA ĐỘ DÀI ---
+                                    encoded_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                    data_url = f"data:image/jpeg;base64,{encoded_img}"
                                     
-                                    files_payload = {
-                                        "file": ("image.jpg", buffered.getvalue(), "image/jpeg")
-                                    }
-                                    
-                                    # Tham số cấu hình chuẩn cho Form Postimages
-                                    data_payload = {
-                                        "gallery": "",
-                                        "optsize": "0", # Giữ nguyên kích thước gốc sau khi nén
-                                        "expire": "0",  # Lưu trữ vĩnh viễn, không bao giờ tự xóa
-                                        "numfiles": "1"
-                                    }
-                                    
-                                    headers = {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                                        "X-Requested-With": "XMLHttpRequest"
-                                    }
-                                    
-                                    try:
-                                        response = requests.post(
-                                            url_api, 
-                                            files=files_payload, 
-                                            data=data_payload,
-                                            headers=headers, 
-                                            timeout=30,
-                                            verify=False
-                                        )
-                                    except requests.exceptions.RequestException as net_err:
-                                        st.error(f"❌ Không thể kết nối tới server Postimages: {net_err}")
-                                        continue
-                                    
-                                    # --- BƯỚC 3: XỬ LÝ KẾT QUẢ TRẢ VỀ ---
-                                    if response is not None:
-                                        if response.status_code == 200:
-                                            try:
-                                                res_json = response.json()
-                                                # Trích xuất đường link ảnh trực tiếp (Direct Link) từ Postimages
-                                                direct_url = res_json["url"]
-                                                current_images.append(direct_url)
-                                            except Exception:
-                                                st.error(f"❌ Postimages phản hồi sai định dạng: {response.text[:100]}")
-                                        else:
-                                            st.error(f"❌ Server Postimages từ chối xử lý (Mã lỗi: {response.status_code})")
+                                    # Giới hạn an toàn của Google Sheets là 50k, chuỗi này chỉ tầm ~20k ký tự
+                                    if len(data_url) < 45000:
+                                        current_images.append(data_url)
+                                    else:
+                                        st.error(f"⚠️ Ảnh {u_file.name} có chi tiết quá phức tạp, vui lòng chụp ở góc khác hoặc đổi ảnh nhẹ hơn!")
                                             
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi xử lý đọc file ảnh {u_file.name}: {e}")
+                                    st.error(f"❌ Lỗi xử lý mã hóa hình ảnh {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
