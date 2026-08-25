@@ -720,39 +720,69 @@ else:
                         current_images = [img.strip() for img in str(current_row["Ảnh"]).split(",") if img.strip()]
 
                     # XỬ LÝ LƯU FILE ẢNH LUÔN MÃ HÓA BASE64 ĐỂ ĐỒNG BỘ TUYỆT ĐỐI KHÔNG SỢ RESET SERVER
+                    response = None 
+
                     if uploaded_files:
-                        with st.spinner("Đang tải hình ảnh lên hệ thống đám mây ImgBB..."):
+                        with st.spinner("Đang tối ưu dung lượng và đẩy hình ảnh lên Cloud..."):
                             import requests
                             import base64
-                            # ĐIỀN MÃ API KEY CỦA BẠN VÀO ĐÂY
-                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
+                            from PIL import Image
+                            import io
+                            import urllib3
+                            
+                            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                            IMGBB_API_KEY = "MÃ_API_KEY_CỦA_BẠN_Ở_ĐÂY" 
                             
                             for u_file in uploaded_files:
                                 try:
-                                    # 1. Chuẩn bị file nhị phân để gửi qua giao thức POST HTTP
-                                    file_bytes = u_file.getvalue()
-                                    base64_image = base64.b64encode(file_bytes).decode("utf-8")
-                                    # 2. Chuẩn bị payload dạng Form-Data (ImgBB nhận ảnh qua tham số 'image' dạng Base64)
+                                    # --- BƯỚC 1: NÉN ẢNH ---
+                                    image = Image.open(u_file)
+                                    if image.mode in ("RGBA", "P"):
+                                        image = image.convert("RGB")
+                                    
+                                    if image.width > 1024 or image.height > 1024:
+                                        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                                    
+                                    buffered = io.BytesIO()
+                                    image.save(buffered, format="JPEG", quality=60)
+                                    base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                                    
+                                    # --- BƯỚC 2: CẤU HÌNH GỬI API ---
                                     payload = {
                                         "key": IMGBB_API_KEY,
                                         "image": base64_image
                                     }
                                     
-                                    # 2. Gọi API của ImgBB để upload ảnh lên mạng
-                                    response = requests.post("https://imgbb.com", data=payload, timeout=30)
-                                    # 4. Kiểm tra phản hồi từ hệ thống
-                                    if response.status_code == 200:
-                                        res_json = response.json()
-                                        # Lấy link ảnh trực tiếp (Direct URL kết thúc bằng đuôi .jpg/.png)
-                                        direct_url = res_json["data"]["url"]
-                                        
-                                        # Thêm đường link ảnh ngắn này vào mảng danh sách
-                                        current_images.append(direct_url)
-                                    else:
-                                        st.error(f"❌ ImgBB từ chối ảnh {u_file.name}: {response.text}")
-                                        
+                                    headers = {
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    }
+                                    
+                                    try:
+                                        response = requests.post(
+                                            "https://imgbb.com", 
+                                            data=payload, 
+                                            headers=headers, 
+                                            timeout=30,
+                                            verify=False
+                                        )
+                                    except requests.exceptions.RequestException as net_err:
+                                        st.error(f"❌ Không thể kết nối tới server ImgBB: {net_err}")
+                                        continue
+                                    
+                                    # --- BƯỚC 3: XỬ LÝ KẾT QUẢ ---
+                                    if response is not None:
+                                        if response.status_code == 200:
+                                            try:
+                                                res_json = response.json()
+                                                direct_url = res_json["data"]["url"]
+                                                current_images.append(direct_url)
+                                            except Exception:
+                                                st.error(f"❌ ImgBB phản hồi định dạng lạ. Nội dung: {response.text[:150]}")
+                                        else:
+                                            st.error(f"❌ Server ImgBB từ chối (Mã {response.status_code}). Chi tiết: {response.text[:150]}")
+                                            
                                 except Exception as e:
-                                    st.error(f"❌ Lỗi kết nối đường truyền tới server ImgBB: {e}")
+                                    st.error(f"❌ Lỗi xử lý ảnh {u_file.name}: {e}")
 
                     # Gom tất cả các link ảnh/chuỗi ảnh trong mảng thành một chuỗi văn bản, cách nhau bởi dấu phẩy
                     final_img_str = ",".join(current_images) if current_images else "None"
