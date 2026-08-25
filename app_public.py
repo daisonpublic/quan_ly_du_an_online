@@ -731,7 +731,7 @@ else:
                             import urllib3
                             
                             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                            IMGBB_API_KEY = "MÃ_API_KEY_CỦA_BẠN_Ở_ĐÂY" 
+                            IMGBB_API_KEY = "29b57c3c44942b6bc6b22aceaf51cb68" 
                             
                             for u_file in uploaded_files:
                                 try:
